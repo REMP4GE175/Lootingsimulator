@@ -414,8 +414,16 @@ function selectBox(type) {
   }
 }
 
-// Exponiere selectBox global, weil index.html inline-Buttons verwendet
+// Exponiere selectBox global (vorerst kompatibel)
 window.selectBox = selectBox;
+
+// Wire box button clicks via JS (statt inline onclick)
+for (let i = 1; i <= 7; i++) {
+  const btn = document.getElementById(`boxBtn${i}`);
+  if (btn) {
+    btn.addEventListener('click', () => selectBox(`Box#${i}`));
+  }
+}
 
 // Versucht, die Kosten für die aktuelle Box vom Guthaben abzuziehen.
 // Gibt true zurück, wenn erfolgreich, ansonsten false.
@@ -436,7 +444,7 @@ const dom = {
   lootContainer: document.getElementById('lootContainer'),
   overlay: document.getElementById('overlay'),
   balance: document.getElementById('balance'),
-  selectedContainer: document.getElementById('selectedContainer'),
+  // selectedContainer removed (unused)
   collectionBtn: document.getElementById('collectionBtn'),
   collectionOverlay: document.getElementById('collectionOverlay'),
   collectionGrid: document.getElementById('collectionGrid'),
@@ -615,11 +623,10 @@ dom.openBtn.addEventListener('click', async () => {
   dom.lootContainer.style.gridTemplateColumns = `repeat(${columns}, 100px)`;
   dom.lootContainer.style.gridTemplateRows = `repeat(${rows}, 100px)`;
   
-  // Overlay anzeigen für Animation
+  // Overlay-Größe passend setzen und anzeigen
+  dom.overlay.style.width = `${columns * 100}px`;
+  dom.overlay.style.height = `${rows * 100}px`;
   dom.overlay.style.display = 'block';
-
-  // Container komplett leeren
-dom.lootContainer.innerHTML = '';
 
 const slots = [];
 for (let i = 0; i < totalSlots; i++) {

@@ -28,10 +28,6 @@ body {
   margin-bottom: 10px;
 }
 
-#selectedContainer {
-  margin-bottom: 10px;
-  font-weight: bold;
-}
 
 #containerWrapper {
   position: relative;
