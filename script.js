@@ -85,7 +85,7 @@ function getCurrentTitle() {
 const itemPools = {
   Common: [
     { name: "Rusty Coin", icon: "rusty coin.png", value: 15, description: "Ein alter, wertloser Münzfund." },
-    { name: "Broken Stick", icon: "broken_stick.png", value: 20, description: "Nicht mal als Waffe zu gebrauchen." },
+    { name: "Holzbrett", icon: "broken_stick.png", value: 20, description: "Nicht mal als Waffe zu gebrauchen." },
   { name: "benutztes Taschentuch", icon: "common_1.png", value: 18, description: "Ein gebrauchtes Stück Stoff." },
     { name: "Streichhölzer", icon: "common_1.png", value: 25, description: "Beschreibung Common_1." },
     { name: "bottle cap", icon: "common_1.png", value: 22, description: "Beschreibung Common_1." },
@@ -351,9 +351,9 @@ function getWeightedItemCount(boxType) {
   const totalSlots = columns * rows;
   
   // Bestimme Füllrate-Ziel basierend auf Box-Typ
-  // Box 1-3: 70% Durchschnitt, Box 4-5: 50%, Box 6-7: 70%
+  // Box 1-3: 70% Durchschnitt, Box 4-5: 60%, Box 6-7: 70%
   const boxNumber = parseInt(boxType.replace('Box#', ''));
-  const targetFillRate = (boxNumber <= 3 || boxNumber >= 6) ? 0.7 : 0.5;
+  const targetFillRate = (boxNumber <= 3 || boxNumber >= 6) ? 0.7 : 0.6;
   
   // Normalverteilung um den Zielwert herum, begrenzt auf 20-100%
   // Verwende Box-Muller-Transformation für Normalverteilung
