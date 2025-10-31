@@ -206,6 +206,9 @@ const boxConfigs = {
 // Aktueller gewählter Box-Typ und Kontostand
 let boxType = "Box#1";
 let balance = 5000000;
+// Öffnungszustand, um Layout-Jumps beim Box-Wechsel während des Öffnens zu vermeiden
+let isOpening = false;
+let pendingBoxType = null; // gewünschter Box-Wechsel, der nach Öffnung angewendet wird
 
 // Box-Reihenfolge für Progression
 const boxOrder = ["Box#1", "Box#2", "Box#3", "Box#4", "Box#5", "Box#6", "Box#7"];
@@ -373,6 +376,22 @@ function getWeightedItemCount(boxType) {
 
 // Setzt den aktuellen Box-Typ (wird auch von HTML onclick benutzt)
 function selectBox(type) {
+  // Wenn gerade eine Öffnung läuft, wende den Wechsel nur visuell an
+  // und verschiebe den tatsächlichen Box-Wechsel bis nach der Animation.
+  if (isOpening) {
+    // Visuelle Auswahl aktualisieren
+    for (let i = 1; i <= 7; i++) {
+      const btn = document.getElementById(`boxBtn${i}`);
+      if (btn) btn.classList.remove('selected');
+    }
+    const boxNumberTemp = type.replace('Box#', '');
+    const selectedBtnTemp = document.getElementById(`boxBtn${boxNumberTemp}`);
+    if (selectedBtnTemp) selectedBtnTemp.classList.add('selected');
+    // Merke gewünschte Box und beende hier
+    pendingBoxType = type;
+    return;
+  }
+
   boxType = type;
   
   // Entferne "selected" Klasse von allen Buttons
@@ -549,6 +568,8 @@ function createEmptyGrid() {
 
 // Event-Handler für den Öffnen-Button
 dom.openBtn.addEventListener('click', async () => {
+  // Markiere, dass eine Öffnung läuft
+  isOpening = true;
   // Button deaktivieren und ausgrauen
   dom.openBtn.disabled = true;
   dom.openBtn.style.opacity = '0.5';
@@ -557,13 +578,15 @@ dom.openBtn.addEventListener('click', async () => {
     // Bei Fehler wieder aktivieren
     dom.openBtn.disabled = false;
     dom.openBtn.style.opacity = '1';
+    isOpening = false;
     return;
   }
-
-  const columns = boxConfigs[boxType].columns || 4;
-  const rows = boxConfigs[boxType].rows || 3;
+  // Box-Konfiguration zum Start der Öffnung einfrieren
+  const openBoxType = boxType;
+  const columns = boxConfigs[openBoxType].columns || 4;
+  const rows = boxConfigs[openBoxType].rows || 3;
   const totalSlots = columns * rows;
-  const itemCount = getWeightedItemCount(boxType);
+  const itemCount = getWeightedItemCount(openBoxType);
   let roundValue = 0;
   
   // Container leeren und Grid neu aufbauen
@@ -602,12 +625,12 @@ dom.overlay.style.display = 'none';
 
   // Statistiken aktualisieren
   stats.totalBoxesOpened++;
-  stats.boxOpenCounts[boxType]++;
+  stats.boxOpenCounts[openBoxType]++;
   stats.totalItemsPulled += itemCount;
 
   for (let i = 0; i < revealSlots.length; i++) {
     const { item } = revealSlots[i];
-    const pulledItem = getRandomItem(boxType);
+  const pulledItem = getRandomItem(openBoxType);
     const name = pulledItem.name || 'Unbekannter Gegenstand';
     const isNew = !discoveredItems.has(name);
 
@@ -769,6 +792,22 @@ dom.overlay.style.display = 'none';
   // Button wieder aktivieren
   dom.openBtn.disabled = false;
   dom.openBtn.style.opacity = '1';
+
+  // Öffnung ist beendet
+  isOpening = false;
+
+  // Falls während der Öffnung eine andere Box gewählt wurde, jetzt anwenden
+  if (pendingBoxType) {
+    const applyType = pendingBoxType;
+    pendingBoxType = null;
+    // Setze logischen Typ und erstelle das neue Grid
+    boxType = applyType;
+    createEmptyGrid();
+    // Modal ggf. aktualisieren
+    if (dom.boxInfoModal && dom.boxInfoModal.style.display === 'block') {
+      populateBoxInfo();
+    }
+  }
 
   // Letzte gezogenen Items speichern (für Sammlungshighlight)
   lastPulledItems = pulledNamesThisRound;
