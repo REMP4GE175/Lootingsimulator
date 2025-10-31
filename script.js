@@ -203,6 +203,9 @@ const boxConfigs = {
   }
 };
 
+// Konstanten
+const SLOT_SIZE_PX = 100;
+
 // Aktueller gewählter Box-Typ und Kontostand
 let boxType = "Box#1";
 let balance = 5000000;
@@ -560,23 +563,9 @@ function saveCounts() {
 // Load persisted counts on startup
 loadCounts();
 
-// Erstellt das leere Grid mit Slots
-function createEmptyGrid() {
-  const columns = boxConfigs[boxType].columns || 4;
-  const rows = boxConfigs[boxType].rows || 3;
-  const totalSlots = columns * rows;
-
-  // Leere den Container und setze Grid-Layout
-  dom.lootContainer.innerHTML = '';
-  dom.lootContainer.style.gridTemplateColumns = `repeat(${columns}, 100px)`;
-  dom.lootContainer.style.gridTemplateRows = `repeat(${rows}, 100px)`;
-
-  // Overlay-Größe an Grid anpassen (initial versteckt)
-  dom.overlay.style.width = `${columns * 100}px`;
-  dom.overlay.style.height = `${rows * 100}px`;
-  dom.overlay.style.display = 'none';
-
-  // Erstelle leere Slots
+// Helper: Erzeugt Slots im Container und gibt Array zurück
+function buildSlots(container, totalSlots) {
+  const slots = [];
   for (let i = 0; i < totalSlots; i++) {
     const slot = document.createElement('div');
     slot.classList.add('slot');
@@ -588,8 +577,30 @@ function createEmptyGrid() {
     item.textContent = '';
 
     slot.appendChild(item);
-    dom.lootContainer.appendChild(slot);
+    container.appendChild(slot);
+    slots.push({ slot, item });
   }
+  return slots;
+}
+
+// Erstellt das leere Grid mit Slots
+function createEmptyGrid() {
+  const columns = boxConfigs[boxType].columns || 4;
+  const rows = boxConfigs[boxType].rows || 3;
+  const totalSlots = columns * rows;
+
+  // Leere den Container und setze Grid-Layout
+  dom.lootContainer.innerHTML = '';
+  dom.lootContainer.style.gridTemplateColumns = `repeat(${columns}, ${SLOT_SIZE_PX}px)`;
+  dom.lootContainer.style.gridTemplateRows = `repeat(${rows}, ${SLOT_SIZE_PX}px)`;
+
+  // Overlay-Größe an Grid anpassen (initial versteckt)
+  dom.overlay.style.width = `${columns * SLOT_SIZE_PX}px`;
+  dom.overlay.style.height = `${rows * SLOT_SIZE_PX}px`;
+  dom.overlay.style.display = 'none';
+
+  // Erstelle leere Slots
+  buildSlots(dom.lootContainer, totalSlots);
 }
 
 // Event-Handler für den Öffnen-Button
@@ -620,32 +631,19 @@ dom.openBtn.addEventListener('click', async () => {
   
   // Container leeren und Grid neu aufbauen
   dom.lootContainer.innerHTML = '';
-  dom.lootContainer.style.gridTemplateColumns = `repeat(${columns}, 100px)`;
-  dom.lootContainer.style.gridTemplateRows = `repeat(${rows}, 100px)`;
+  dom.lootContainer.style.gridTemplateColumns = `repeat(${columns}, ${SLOT_SIZE_PX}px)`;
+  dom.lootContainer.style.gridTemplateRows = `repeat(${rows}, ${SLOT_SIZE_PX}px)`;
   
   // Overlay-Größe passend setzen und anzeigen
-  dom.overlay.style.width = `${columns * 100}px`;
-  dom.overlay.style.height = `${rows * 100}px`;
+  dom.overlay.style.width = `${columns * SLOT_SIZE_PX}px`;
+  dom.overlay.style.height = `${rows * SLOT_SIZE_PX}px`;
   dom.overlay.style.display = 'block';
 
-const slots = [];
-for (let i = 0; i < totalSlots; i++) {
-    const slot = document.createElement('div');
-    slot.classList.add('slot');
+  // Slots bauen (mit Helper)
+  const slots = buildSlots(dom.lootContainer, totalSlots);
 
-    const item = document.createElement('div');
-    item.classList.add('item');
-    item.dataset.revealed = 'false';
-    item.style.backgroundColor = '#222';
-    item.textContent = '';
-
-    slot.appendChild(item);
-    dom.lootContainer.appendChild(slot);
-    slots.push({ slot, item });
-}
-
-await sleep(500);
-dom.overlay.style.display = 'none';
+  await sleep(500);
+  dom.overlay.style.display = 'none';
 
   // Ziehe Items für die ersten itemCount Slots
   const revealSlots = slots.slice(0, itemCount);
@@ -950,10 +948,13 @@ function updateBoxAvailability() {
       const costText = formatCost(boxCost);
       const icon = getBoxIcon(boxName);
       // Zeige Icon und Namen, bei Free ohne Geld-Emoji
-      if (boxCost === 0) {
-        btn.innerHTML = `${icon} ${displayName} (${costText})`;
-      } else {
-        btn.innerHTML = `${icon} ${displayName} (${costText} 💰)`;
+      const newHTML = (boxCost === 0)
+        ? `${icon} ${displayName} (${costText})`
+        : `${icon} ${displayName} (${costText} 💰)`;
+      
+      // Nur innerHTML ändern, wenn es sich wirklich geändert hat (verhindert Layout thrash)
+      if (btn.innerHTML !== newHTML) {
+        btn.innerHTML = newHTML;
       }
     } else {
       // Box ist noch gesperrt (nur die nächste wird angezeigt)
@@ -961,7 +962,10 @@ function updateBoxAvailability() {
       btn.classList.remove('affordable');
       btn.disabled = true;
       // Zeige Schloss-Icon und Kosten auf gesperrten Buttons
-      btn.innerHTML = `🔒 ${formatCost(boxCost)} 💰`;
+      const newHTML = `🔒 ${formatCost(boxCost)} 💰`;
+      if (btn.innerHTML !== newHTML) {
+        btn.innerHTML = newHTML;
+      }
     }
   }
 }
