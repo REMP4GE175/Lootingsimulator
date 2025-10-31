@@ -51,15 +51,15 @@ const stats = {
 
 // Titel-System: Level → Titel
 const titles = [
-  { level: 1, title: "Anfänger" },
-  { level: 5, title: "Sammler" },
-  { level: 10, title: "Schatzsucher" },
-  { level: 15, title: "Glücksritter" },
-  { level: 20, title: "Veteran" },
-  { level: 25, title: "Meister" },
-  { level: 30, title: "Champion" },
-  { level: 40, title: "Legende" },
-  { level: 50, title: "Bäutebaron" }
+  { level: 1, title: "Timmy" },
+  { level: 5, title: "Anfänger" },
+  { level: 10, title: "Sammler" },
+  { level: 15, title: "Lootgoblin" },
+  { level: 20, title: "Bäutebaron" },
+  { level: 25, title: "Trüffelschweinchen" },
+  { level: 30, title: "Meister" },
+  { level: 40, title: "Champion" },
+  { level: 50, title: "Legende" }
 ];
 
 // Berechnet benötigte XP für nächstes Level (exponentielle Kurve)
@@ -85,13 +85,13 @@ function getCurrentTitle() {
 const itemPools = {
   Common: [
     { name: "Rusty Coin", icon: "rusty coin.png", value: 15, description: "Ein alter, wertloser Münzfund." },
-    { name: "Holzbrett", icon: "broken_stick.png", value: 20, description: "Nicht mal als Waffe zu gebrauchen." },
-  { name: "benutztes Taschentuch", icon: "common_1.png", value: 18, description: "Ein gebrauchtes Stück Stoff." },
-    { name: "Streichhölzer", icon: "common_1.png", value: 25, description: "Beschreibung Common_1." },
-    { name: "bottle cap", icon: "common_1.png", value: 22, description: "Beschreibung Common_1." },
-    { name: "fischgräte", icon: "gräte.png", value: 30, description: "Beschreibung Common_1." },
-    { name: "Eichel", icon: "common_1.png", value: 28, description: "Beschreibung Common_1." },
-    { name: "Göffel", icon: "common_1.png", value: 35, description: "Beschreibung Common_1." },
+    { name: "Holzbrett", icon: "Holzbrett.png", value: 20, description: "Nicht mal als Waffe zu gebrauchen." },
+    { name: "Taschentuch", icon: "Taschentuch.png", value: 18, description: "Ein gebrauchtes Stück Stoff." },
+    { name: "Streichhölzer", icon: "Streichholz.png", value: 25, description: "Beschreibung Common_1." },
+    { name: "bottle cap", icon: "bottle cap.png", value: 22, description: "Beschreibung Common_1." },
+    { name: "fischgräte", icon: "Gräte.png", value: 30, description: "Beschreibung Common_1." },
+    { name: "Eichel", icon: "Eichel.png", value: 28, description: "Beschreibung Common_1." },
+    { name: "Göffel", icon: "Göffel.png", value: 35, description: "Beschreibung Common_1." },
   // Falls ein Item keinen Namen hat, verwenden wir einen Platzhalter.
   { name: "Unbekannter Gegenstand", icon: "common_1.png", value: 40, description: "Ein unbekannter Fund." },
     { name: "Dennis", icon: "Dennis.png", value: 32, description: "Beschreibung Common_1." }
@@ -705,7 +705,7 @@ dom.openBtn.addEventListener('click', async () => {
       floatingLupe.textContent = '🔍';
       floatingLupe.style.position = 'absolute';
       floatingLupe.style.pointerEvents = 'none';
-      floatingLupe.style.zIndex = '150';
+      floatingLupe.style.zIndex = '2600';
       
       // Relativ zur Slot-Mitte positionieren
       const centerX = (item.offsetWidth / 2);
@@ -730,7 +730,8 @@ dom.openBtn.addEventListener('click', async () => {
         const angle = ((t % period) / period) * Math.PI * 2;
         const offsetX = Math.cos(angle) * radius;
         const offsetY = Math.sin(angle) * radius;
-        floatingLupe.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+        // translate(-50%, -50%) zentriert die Lupe, dann offset für Orbit
+        floatingLupe.style.transform = `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px))`;
         floatingLupe._raf = requestAnimationFrame(orbit);
       }
       floatingLupe._raf = requestAnimationFrame(orbit);
@@ -885,9 +886,22 @@ function showLevelUpNotification() {
   `;
   document.body.appendChild(notification);
   
+  // Click zum Schließen - schließt ALLE Level-up Fenster
+  notification.style.cursor = 'pointer';
+  notification.addEventListener('click', () => {
+    const allNotifications = document.querySelectorAll('.level-up-notification');
+    allNotifications.forEach(n => {
+      n.classList.add('fade-out');
+      setTimeout(() => n.remove(), 500);
+    });
+  });
+  
+  // Auto-Close nach 3 Sekunden
   setTimeout(() => {
-    notification.classList.add('fade-out');
-    setTimeout(() => notification.remove(), 500);
+    if (notification.parentNode) {
+      notification.classList.add('fade-out');
+      setTimeout(() => notification.remove(), 500);
+    }
   }, 3000);
 }
 
