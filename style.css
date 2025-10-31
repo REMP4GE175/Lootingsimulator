@@ -1,0 +1,917 @@
+body {
+  font-family: sans-serif;
+  text-align: center;
+  background-color: #1e1e1e;
+  color: white;
+}
+
+.app-version {
+  font-size: 0.5em;
+  color: #bdbdbd;
+  margin-top: -6px;
+  margin-bottom: 8px;
+}
+
+#balance {
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+#containerSelection {
+  margin-bottom: 10px;
+}
+
+#selectedContainer {
+  margin-bottom: 10px;
+  font-weight: bold;
+}
+
+#containerWrapper {
+  position: relative;
+  display: inline-block;
+  margin: 20px auto;
+}
+
+#containerArea {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+#openBtn {
+  transition: all 0.3s ease;
+  cursor: pointer;
+  font-size: 24px;
+  padding: 15px 40px;
+  font-weight: bold;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: 3px solid #9f7aea;
+  border-radius: 12px;
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4),
+              inset 0 -3px 10px rgba(0,0,0,0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+#openBtn::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent,
+    rgba(255,255,255,0.1),
+    transparent
+  );
+  transform: rotate(45deg);
+  animation: shine 3s infinite;
+}
+
+@keyframes shine {
+  0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+  100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+}
+
+#openBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6),
+              inset 0 -3px 10px rgba(0,0,0,0.2);
+  border-color: #b794f6;
+}
+
+#openBtn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 10px rgba(102, 126, 234, 0.4),
+              inset 0 -3px 10px rgba(0,0,0,0.2);
+}
+
+#openBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.container-grid {
+  display: grid;
+  border: 0.5px solid #888;
+}
+
+.slot {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  background-color: #222;
+  border: 1px solid #555;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2050; /* Basisebene für Slots - sollte über dem Overlay liegen */
+}
+
+.item {
+  width: 90%;
+  height: 90%;
+  /* Default: kein spezieller Hintergrund hier - Vorabzustand wird per Klasse gesteuert */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  position: relative;
+  z-index: 2051; /* Items liegen über Slots */
+}
+
+/* Vorabzustand: gestreiftes Feld (wie das große Overlay) für die Slots,
+   die später ein Item erhalten sollen. 45° Streifen, gleiche Farben.
+   Diese Klasse wird nur auf die ersten N Slots gesetzt, bevor aufgedeckt wird. */
+.item.pre-reveal {
+  background: repeating-linear-gradient(
+    45deg,
+    #666 0px,
+    #666 10px,
+    #444 10px,
+    #444 20px
+  );
+  border: 2px solid #888;
+}
+
+.item.revealed {
+  font-weight: bold;
+  color: black;
+  border: 2px solid black;
+}
+
+.lupe {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 60px;
+  color: rgba(255, 255, 255, 0.8);
+  pointer-events: none;
+  z-index: 2052; /* Lupe über Items/Slots */
+}
+
+#overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* Deutliche graue Box über den Slots während des Öffnens */
+  background: repeating-linear-gradient(
+    45deg,
+    #666 0px,
+    #666 10px,
+    #444 10px,
+    #444 20px
+  );
+  background-color: rgba(70,70,70,0.9); /* fallback/solid color für bessere Sichtbarkeit */
+  border: 2px solid #888;
+  z-index: 2500; /* Overlay über Slots, aber unter floating layer (3000) */
+  display: none;
+  pointer-events: none;
+}
+
+/* Sammlung Overlay */
+#collectionOverlay {
+  position: fixed;
+  top: 10%;
+  left: 10%;
+  width: 80%;
+  height: 80%;
+  background: rgba(0, 0, 0, 0.95);
+  color: white;
+  overflow-y: auto;
+  padding: 20px;
+  z-index: 5000; /* Über allen anderen Elementen */
+  display: none;
+}
+
+/* Stats Overlay */
+#statsOverlay {
+  position: fixed;
+  top: 10%;
+  left: 10%;
+  width: 80%;
+  height: 80%;
+  background: rgba(0, 0, 0, 0.95);
+  color: white;
+  overflow-y: auto;
+  padding: 20px;
+  z-index: 5000;
+  display: none;
+}
+
+#statsOverlay h2 {
+  text-align: center;
+  margin-bottom: 30px;
+  font-size: 32px;
+  color: #3498db;
+}
+
+#statsContent {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.stats-section {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.stats-section h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 24px;
+  color: #f39c12;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.stat-item:last-child {
+  border-bottom: none;
+}
+
+.stat-label {
+  font-size: 16px;
+  color: #bdc3c7;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: bold;
+  color: #ecf0f1;
+}
+
+.progress-bar-container {
+  width: 100%;
+  height: 30px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 15px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #3498db 0%, #2ecc71 100%);
+  transition: width 0.5s ease;
+  border-radius: 15px;
+}
+
+#closeStatsBtn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(231, 76, 60, 0.8);
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 10px 15px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+#closeStatsBtn:hover {
+  background: rgba(231, 76, 60, 1);
+  transform: scale(1.1);
+}
+
+#collectionGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  align-items: flex-start;
+}
+
+.rarity-section {
+  width: 100%;
+}
+
+.rarity-section h2 {
+  font-size: 18px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #555;
+  padding-bottom: 5px;
+  text-align: left;
+  color: white;
+}
+
+.rarity-section .grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 10px;
+  justify-items: center;
+}
+
+.rarity-section .item {
+  width: 100px;
+  height: 100px;
+  background-color: #222;
+  border: 1px solid #555;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+}
+
+.rarity-section .item img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+/* Loot-Grid Icons (icons shown while revealing) */
+#lootContainer .item img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.rarity-section .locked {
+  filter: brightness(0);
+}
+
+.rarity-section .locked::after {
+  content: "❓";
+  position: absolute;
+  top: 30%;
+  left: 40%;
+  font-size: 24px;
+  color: white;
+}
+
+/* Transparente Farben für Raritäten */
+.rarity-Common {
+  background-color: rgba(204, 204, 204, 0.6);
+}
+.rarity-Rare {
+  background-color: rgba(74, 144, 226, 0.6);
+}
+.rarity-Epic {
+  background-color: rgba(155, 89, 182, 0.6);
+}
+.rarity-Legendary {
+  background-color: rgba(241, 196, 15, 0.6);
+}
+.rarity-Mythisch {
+  background-color: rgba(231, 76, 60, 0.6);
+}
+
+/* Glow-Animation (wieder eingeführt, intensität wird per CSS-Variable --glow-opacity
+   gesteuert; pro Rarität werden RGB-Werte in --glow-r/g/b gesetzt.) */
+@keyframes glowPulse {
+  0% {
+    box-shadow: 0 0 10px rgba(var(--glow-r,255), var(--glow-g,255), var(--glow-b,255), var(--glow-opacity,0.4));
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(var(--glow-r,255), var(--glow-g,255), var(--glow-b,255), var(--glow-opacity,0.8)), 0 0 60px rgba(var(--glow-r,255), var(--glow-g,255), var(--glow-b,255), calc(var(--glow-opacity,0.4) * 0.9));
+    transform: scale(1.05);
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(var(--glow-r,255), var(--glow-g,255), var(--glow-b,255), var(--glow-opacity,0.4));
+    transform: scale(1);
+  }
+}
+
+.glow-base {
+  animation: glowPulse 1.5s ease-out infinite;
+  z-index: 2500;
+  position: relative;
+  pointer-events: none;
+}
+
+/* Rarity-specific RGB values (used by the glow). Opacity is set inline by JS via --glow-opacity. */
+.glow-Common { --glow-r: 204; --glow-g: 204; --glow-b: 204; }
+.glow-Rare   { --glow-r: 74;  --glow-g: 144; --glow-b: 226; }
+.glow-Epic   { --glow-r: 155; --glow-g: 89;  --glow-b: 182; }
+.glow-Legendary { --glow-r: 241; --glow-g: 196; --glow-b: 15; }
+.glow-Mythisch  { --glow-r: 231; --glow-g: 76;  --glow-b: 60; }
+
+/* Hervorhebung für neu entdeckte Items (subtil, ohne animierten Glow) */
+.newly-discovered {
+  outline: 3px solid rgba(255,255,255,0.04);
+}
+
+/* Subtiles Hervorheben für Items aus der letzten Öffnung (kein Glow) */
+.last-pulled {
+  box-shadow: 0 0 10px rgba(255,255,255,0.03) inset;
+  border: 1px solid rgba(255,255,255,0.04);
+}
+
+.floating-lupe {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  font-size: 42px; /* 30% kleiner (von 60px auf 42px) */
+  pointer-events: none;
+  z-index: 3050; /* über floating glows */
+  color: rgba(255,255,255,0.95);
+}
+
+/* Badge für Anzahl wie oft ein Item gesammelt wurde */
+.item-count-badge {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  background: rgba(0,0,0,0.7);
+  color: white;
+  padding: 2px 6px;
+  font-size: 12px;
+  border-radius: 12px;
+  box-shadow: 0 0 6px rgba(0,0,0,0.6);
+}
+
+/* custom tooltip removed */
+
+#closeCollectionBtn {
+  position: absolute;
+  top: 10px;
+  right: 20px;
+  z-index: 1100;
+  background-color: #444;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+#closeCollectionBtn:hover {
+  background-color: #666;
+}
+
+/* Info-Button und Modal */
+.box-info-btn {
+  font-size: 24px;
+  padding: 10px 15px;
+  cursor: pointer;
+  background: rgba(255,255,255,0.02);
+  border: 2px solid #666;
+  color: white;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  min-width: 50px;
+  z-index: 4100; /* über Sammlung */
+}
+.box-info-btn:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: #888;
+  transform: scale(1.05);
+}
+
+/* Box Selection Wrapper mit Icon-Buttons */
+#boxSelectionWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+#boxSelection {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: 5px;
+  justify-content: center;
+  max-width: 100%;
+}
+
+/* Box 7 soll die ganze letzte Zeile einnehmen und zentriert sein */
+#boxBtn7 {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
+#boxSelection button {
+  font-size: 18px;
+  padding: 12px 20px;
+  font-weight: bold;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #3a3a3a; /* Fallback-Farbe */
+  border: 2px solid #666;
+  border-radius: 8px;
+  color: white;
+  text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+  position: relative;
+  min-width: 80px;
+  min-height: 60px;
+}
+
+/* Individuelle Hintergrundbilder für jede Box */
+#boxBtn1 { 
+  background-image: linear-gradient(135deg, #6b4423 0%, #3d2817 100%);
+  /* Holzkiste - braune Holztöne */
+}
+#boxBtn2 { 
+  background-image: linear-gradient(135deg, #8b7355 0%, #5c4a3a 100%);
+  /* Sporttasche */
+}
+#boxBtn3 { 
+  background-image: linear-gradient(135deg, #a8a8a8 0%, #6e6e6e 100%);
+  /* Koffer - Silber */
+}
+#boxBtn4 { 
+  background-image: linear-gradient(135deg, #ffd700 0%, #b8860b 100%);
+  /* Militärkoffer - Gold */
+}
+#boxBtn5 { 
+  background-image: linear-gradient(135deg, #ff8c00 0%, #ff4500 100%);
+  box-shadow: 0 0 15px rgba(255, 140, 0, 0.4);
+  /* Aluminiumkoffer - Orange-Rot */
+}
+#boxBtn6 { 
+  background-image: linear-gradient(135deg, #ff00ff 0%, #8b008b 100%);
+  box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+  /* Safe - Pink-Violett */
+}
+#boxBtn7 { 
+  background-image: linear-gradient(135deg, #ff1493 0%, #ff6347 100%);
+  box-shadow: 0 0 25px rgba(255, 20, 147, 0.6);
+  animation: mythicGlow 2s ease-in-out infinite;
+  /* Tresor - Pink-Rot mit Animation */
+}
+
+@keyframes mythicGlow {
+  0%, 100% { box-shadow: 0 0 25px rgba(255, 20, 147, 0.6); }
+  50% { box-shadow: 0 0 35px rgba(255, 20, 147, 0.9); }
+}
+
+#iconButtons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+#collectionBtn, #statsBtn {
+  font-size: 24px;
+  padding: 10px 15px;
+  cursor: pointer;
+  background: rgba(255,255,255,0.02);
+  border: 2px solid #666;
+  color: white;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  min-width: 50px;
+}
+
+#collectionBtn:hover, #statsBtn:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: #888;
+  transform: scale(1.05);
+}
+
+/* Gesperrte Box-Buttons (Progression-System) */
+#boxSelection button.locked {
+  background: repeating-linear-gradient(
+    45deg,
+    #444 0px,
+    #444 10px,
+    #333 10px,
+    #333 20px
+  );
+  color: #888;
+  cursor: not-allowed;
+  border: 2px solid #555;
+  position: relative;
+}
+
+#boxSelection button.locked:hover {
+  background: repeating-linear-gradient(
+    45deg,
+    #444 0px,
+    #444 10px,
+    #333 10px,
+    #333 20px
+  );
+}
+
+/* Freigeschaltete Boxen - Standard verblasst */
+#boxSelection button:not(.locked):not(.affordable) {
+  opacity: 0.5;
+}
+
+/* Freigeschaltete Box die sich der Spieler leisten kann - volle Helligkeit */
+#boxSelection button.affordable {
+  opacity: 1;
+}
+
+#boxSelection button.selected {
+  border: 3px solid #2ecc71;
+  box-shadow: 0 0 15px rgba(46, 204, 113, 0.6);
+}
+
+.info-modal {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%,-50%);
+  background: rgba(10,10,10,0.98);
+  border: 1px solid #444;
+  padding: 16px;
+  color: white;
+  z-index: 5100;
+  min-width: 320px;
+  max-width: 90%;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.7);
+}
+.info-content { position: relative; }
+.info-close { position: absolute; right: 8px; top: 8px; background: transparent; border: none; color: #aaa; font-size: 16px; cursor: pointer; }
+.info-header { margin-bottom: 8px; text-align: left; }
+.info-table { width: 100%; border-collapse: collapse; text-align: left; }
+.info-table th, .info-table td { padding: 6px 8px; border-bottom: 1px solid #222; }
+.info-table .rarity-name { font-weight: 600; }
+
+.skill-bonus-info {
+  background: rgba(155, 89, 182, 0.2);
+  border: 2px solid rgba(155, 89, 182, 0.5);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 10px 0;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.skill-bonus-info strong {
+  color: #9b59b6;
+  font-size: 16px;
+}
+
+/* ======= Level & XP System ======= */
+#levelDisplay {
+  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  padding: 15px 20px;
+  margin: 10px auto 20px;
+  border-radius: 12px;
+  max-width: 600px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+#levelInfo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+#playerLevel {
+  font-size: 24px;
+  font-weight: bold;
+  color: #f39c12;
+}
+
+#playerTitle {
+  font-size: 18px;
+  color: #ecf0f1;
+  font-style: italic;
+}
+
+#xpBarContainer {
+  position: relative;
+  width: 100%;
+  height: 30px;
+  background: #34495e;
+  border-radius: 15px;
+  overflow: hidden;
+  margin-bottom: 10px;
+  border: 2px solid #2c3e50;
+}
+
+#xpBar {
+  height: 100%;
+  background: linear-gradient(90deg, #3498db 0%, #2ecc71 100%);
+  transition: width 0.5s ease;
+  border-radius: 15px;
+}
+
+#xpText {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-weight: bold;
+  color: white;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+  font-size: 14px;
+}
+
+#skillsBtn {
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  box-shadow: 0 3px 10px rgba(155, 89, 182, 0.3);
+}
+
+#skillsBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(155, 89, 182, 0.5);
+}
+
+#skillsBtn.has-points {
+  animation: pulse-glow 1.5s infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 3px 10px rgba(155, 89, 182, 0.3); }
+  50% { box-shadow: 0 5px 25px rgba(241, 196, 15, 0.8); }
+}
+
+
+/* Skill Modal Overlay: zentriert wie Sammlung/Stats */
+#skillModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  color: white;
+  overflow-y: auto;
+  padding: 0;
+  z-index: 5000;
+  display: none;
+}
+
+.skill-modal {
+  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  padding: 30px;
+  border-radius: 15px;
+  max-width: 700px;
+  margin: 50px auto;
+  box-shadow: 0 10px 50px rgba(0,0,0,0.5);
+  position: relative;
+}
+
+.skill-modal .close-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 5px;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.skill-modal .close-btn:hover {
+  opacity: 1;
+}
+
+.skill-modal h2 {
+  color: #f39c12;
+  margin-bottom: 20px;
+  font-size: 32px;
+}
+
+.skill-points {
+  font-size: 20px;
+  margin-bottom: 30px;
+  color: #ecf0f1;
+}
+
+.skill-tree {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.skill-branch {
+  background: rgba(255,255,255,0.05);
+  padding: 20px;
+  border-radius: 10px;
+  border: 2px solid rgba(255,255,255,0.1);
+  transition: all 0.3s ease;
+}
+
+.skill-branch:hover {
+  border-color: rgba(255,255,255,0.3);
+  transform: translateY(-5px);
+}
+
+.skill-branch h3 {
+  font-size: 24px;
+  margin-bottom: 10px;
+}
+
+.skill-description {
+  font-size: 14px;
+  color: #bdc3c7;
+  margin-bottom: 15px;
+  min-height: 40px;
+}
+
+.skill-level {
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 15px;
+  color: #3498db;
+}
+
+.upgrade-btn {
+  background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  width: 100%;
+  transition: all 0.3s ease;
+}
+
+.upgrade-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 5px 15px rgba(39, 174, 96, 0.5);
+}
+
+.upgrade-btn:disabled {
+  background: #555;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Level Up Notification */
+.level-up-notification {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+  padding: 40px 60px;
+  border-radius: 20px;
+  box-shadow: 0 10px 50px rgba(0,0,0,0.7);
+  z-index: 10000;
+  animation: levelUpAppear 0.5s ease;
+  text-align: center;
+}
+
+@keyframes levelUpAppear {
+  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+.level-up-notification.fade-out {
+  animation: levelUpFadeOut 0.5s ease forwards;
+}
+
+@keyframes levelUpFadeOut {
+  to { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+}
+
+.level-up-content h2 {
+  font-size: 48px;
+  margin-bottom: 15px;
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+.level-up-content p {
+  font-size: 24px;
+  color: white;
+  margin: 10px 0;
+}
+
+.level-up-title {
+  font-weight: bold;
+  color: #ecf0f1;
+}
+
+.level-up-skill {
+  color: #2ecc71;
+  font-weight: bold;
+}
+

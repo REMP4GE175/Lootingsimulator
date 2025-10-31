@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Lootcontainer-Simulator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Lootingsimulator</h1>
+  <div class="app-version" aria-label="Version">v0.9</div>
+  
+  <p id="balance">💰: 0</p>
+
+
+  <!-- NEU: Alles in einem Wrapper -->
+
+  <div id="containerArea">
+    <div id="containerWrapper">
+      <div id="overlay"></div>
+      <div id="lootContainer" class="container-grid"></div>
+    </div>
+    <!-- Box-Auswahl unter dem Lootcontainer und über dem Open-Button -->
+    <div id="boxSelectionWrapper">
+      <div id="boxSelection">
+        <button id="boxBtn1" data-box="Box#1" onclick="selectBox('Box#1')">🗄️ Schublade (Free)</button>
+        <button id="boxBtn2" data-box="Box#2" onclick="selectBox('Box#2')">🎒 Sporttasche (1K 💰)</button>
+        <button id="boxBtn3" data-box="Box#3" onclick="selectBox('Box#3')">💼 Koffer (10K 💰)</button>
+        <button id="boxBtn4" data-box="Box#4" onclick="selectBox('Box#4')">📦 Holzkiste (100K 💰)</button>
+        <button id="boxBtn5" data-box="Box#5" onclick="selectBox('Box#5')">🎖️ Militärkoffer (250K 💰)</button>
+        <button id="boxBtn6" data-box="Box#6" onclick="selectBox('Box#6')">🔒 Safe (500K 💰)</button>
+        <button id="boxBtn7" data-box="Box#7" onclick="selectBox('Box#7')">🏦 Tresor (1M 💰)</button>
+      </div>
+      <div id="iconButtons">
+        <button id="statsBtn" title="Statistiken">📊</button>
+        <button id="collectionBtn" title="Sammlung">📚</button>
+      </div>
+    </div>
+    <button id="openBtn">Öffnen 🔑</button>
+  </div>
+
+<!-- Level & XP Display -->
+<div id="levelDisplay">
+  <div id="levelInfo">
+    <span id="playerLevel">Level 1</span>
+    <span id="playerTitle">Anfänger</span>
+  </div>
+  <div id="xpBarContainer">
+    <div id="xpBar"></div>
+    <span id="xpText">0 / 500 XP</span>
+  </div>
+  <button id="skillsBtn">⚡ Skills (<span id="skillPointsDisplay">0</span>)</button>
+</div>
+
+<!-- Skill Tree Modal -->
+<div id="skillModal" style="display:none;" class="overlay">
+  <div class="modal-content skill-modal">
+    <button id="closeSkillBtn" class="close-btn">❌</button>
+    <h2>⚡ Skill-Tree</h2>
+    <p class="skill-points">Verfügbare Punkte: <span id="availablePoints">0</span></p>
+    
+    <div class="skill-tree">
+      <div class="skill-branch">
+        <h3>💰 Wohlstand</h3>
+        <p class="skill-description">Erhöht Item-Werte<br>+5% pro Punkt</p>
+        <div class="skill-level">
+          <span id="wohlstandLevel">0</span> / 20
+        </div>
+        <button id="upgradeWohlstand" class="upgrade-btn">Upgrade</button>
+      </div>
+      
+      <div class="skill-branch">
+        <h3>🍀 Glück</h3>
+        <p class="skill-description">Erhöht Rarity-Chancen<br>Bessere Drop-Verteilung</p>
+        <div class="skill-level">
+          <span id="glueckLevel">0</span> / 20
+        </div>
+        <button id="upgradeGlueck" class="upgrade-btn">Upgrade</button>
+      </div>
+      
+      <div class="skill-branch">
+        <h3>⚡ Tempo</h3>
+        <p class="skill-description">Schnellere Untersuchung<br>-5% Zeit pro Punkt</p>
+        <div class="skill-level">
+          <span id="effizienzLevel">0</span> / 10
+        </div>
+        <button id="upgradeEffizienz" class="upgrade-btn">Upgrade</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Stats Overlay -->
+<div id="statsOverlay" style="display:none;" class="overlay">
+  <button id="closeStatsBtn">❌</button>
+  <h2>📊 Statistiken</h2>
+  <div id="statsContent"></div>
+</div>
+
+<div id="collectionOverlay" style="display:none;" class="overlay">
+  <button id="closeCollectionBtn">❌</button>
+  <div id="collectionGrid" class="grid"></div>
+</div>
+
+  <script src="script.js"></script>
+</body>
+</html>
