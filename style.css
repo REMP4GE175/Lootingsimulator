@@ -422,11 +422,11 @@ body {
 }
 
 .floating-lupe {
-  position: fixed;
+  position: absolute; /* Angepasst für Slot-relative Positionierung */
   transform: translate(-50%, -50%);
   font-size: 42px; /* 30% kleiner (von 60px auf 42px) */
   pointer-events: none;
-  z-index: 3050; /* über floating glows */
+  z-index: 150; /* Über Item (z-index 100) aber unter Overlay */
   color: rgba(255,255,255,0.95);
 }
 

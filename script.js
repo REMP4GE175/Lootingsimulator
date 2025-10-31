@@ -705,7 +705,7 @@ dom.openBtn.addEventListener('click', async () => {
       floatingLupe.textContent = '🔍';
       floatingLupe.style.position = 'absolute';
       floatingLupe.style.pointerEvents = 'none';
-      floatingLupe.style.zIndex = '100';
+      floatingLupe.style.zIndex = '150';
       
       // Relativ zur Slot-Mitte positionieren
       const centerX = (item.offsetWidth / 2);
