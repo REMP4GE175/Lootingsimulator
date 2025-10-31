@@ -631,6 +631,13 @@ body {
   box-shadow: 0 0 15px rgba(46, 204, 113, 0.6);
 }
 
+/* Temporär deaktivierte Auswahl während des Öffnens */
+#boxSelection button:disabled,
+#boxSelection button.temp-disabled {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
 .info-modal {
   position: fixed;
   left: 50%;

@@ -463,6 +463,24 @@ const dom = {
   upgradeEffizienz: document.getElementById('upgradeEffizienz')
 };
 
+// Aktiviert/Deaktiviert temporär die Box-Auswahl-Buttons
+function setBoxSelectionEnabled(enabled) {
+  for (let i = 1; i <= 7; i++) {
+    const btn = document.getElementById(`boxBtn${i}`);
+    if (!btn) continue;
+    if (!enabled) {
+      btn.disabled = true; // verhindert Klicks, inkl. inline onclick
+      btn.classList.add('temp-disabled');
+    } else {
+      btn.classList.remove('temp-disabled');
+    }
+  }
+  if (enabled) {
+    // Stelle korrekte Enabled/Locked-States wieder her
+    updateBoxAvailability();
+  }
+}
+
 // NOTE: Glow-Effekte wurden entfernt — floatingGlowLayer deaktiviert.
 // Die Lupe wird weiterhin an document.body gehängt.
 
@@ -573,11 +591,14 @@ dom.openBtn.addEventListener('click', async () => {
   // Button deaktivieren und ausgrauen
   dom.openBtn.disabled = true;
   dom.openBtn.style.opacity = '0.5';
+  // Box-Auswahl temporär deaktivieren
+  setBoxSelectionEnabled(false);
 
   if (!deductBalanceForBox()) {
     // Bei Fehler wieder aktivieren
     dom.openBtn.disabled = false;
     dom.openBtn.style.opacity = '1';
+    setBoxSelectionEnabled(true);
     isOpening = false;
     return;
   }
@@ -792,6 +813,8 @@ dom.overlay.style.display = 'none';
   // Button wieder aktivieren
   dom.openBtn.disabled = false;
   dom.openBtn.style.opacity = '1';
+  // Box-Auswahl wieder aktivieren
+  setBoxSelectionEnabled(true);
 
   // Öffnung ist beendet
   isOpening = false;
