@@ -693,39 +693,44 @@ dom.openBtn.addEventListener('click', async () => {
   for (let i = 0; i < revealSlots.length; i++) {
     const { slot, item, pulledItem } = revealSlots[i];
 
-    // Erzeuge die Lupe im floating layer (nicht als Kind des Slots),
-    // so sie immer über dem Overlay/den Slots sichtbar ist.
+    // Erzeuge die Lupe als Kind des Slots, sodass sie beim Scrollen mitbewegt wird
     let floatingLupe = null;
     try {
       const rectLupe = item.getBoundingClientRect();
-      // Erzeuge ein fixed Lupe-Element, das sich später im Kreis bewegen wird
+      const slotRect = slot.getBoundingClientRect();
+      
+      // Erzeuge Lupe als absolutes Element innerhalb des Slots
       floatingLupe = document.createElement('div');
       floatingLupe.classList.add('floating-lupe');
       floatingLupe.textContent = '🔍';
-      // Setze initial Position in die Mitte des Slots
-      const centerX = rectLupe.left + window.scrollX + rectLupe.width / 2;
-      const centerY = rectLupe.top + window.scrollY + rectLupe.height / 2;
+      floatingLupe.style.position = 'absolute';
+      floatingLupe.style.pointerEvents = 'none';
+      floatingLupe.style.zIndex = '100';
+      
+      // Relativ zur Slot-Mitte positionieren
+      const centerX = (item.offsetWidth / 2);
+      const centerY = (item.offsetHeight / 2);
       floatingLupe.style.left = `${centerX}px`;
       floatingLupe.style.top = `${centerY}px`;
-      // Performance-Hinweis
-      floatingLupe.style.willChange = 'transform, left, top';
-  // Hänge die Lupe direkt an <body> (kein Glow-Layer mehr)
-  document.body.appendChild(floatingLupe);
+      floatingLupe.style.willChange = 'transform';
+      
+      // Hänge die Lupe an den Slot (nicht an body)
+      slot.style.position = 'relative'; // Damit absolute positioning funktioniert
+      slot.appendChild(floatingLupe);
 
-  // Animations-Loop: kreisförmige Bewegung um den Slot
-  // Radius-Faktor: wie weit vom Zentrum die Lupe kreist (0.0 - 0.5)
-  const RADIUS_FACTOR = 0.20; // kleinerer Wert = näher am Zentrum
-  const radius = Math.max(8, Math.min(rectLupe.width, rectLupe.height) * RADIUS_FACTOR);
-  const basePeriod = 1170; // Basis-Millisekunden pro Umdrehung
-  const period = basePeriod * getTempoMultiplier(); // Mit Tempo-Skill anpassen
+      // Animations-Loop: kreisförmige Bewegung um den Slot-Mittelpunkt
+      // Radius-Faktor: wie weit vom Zentrum die Lupe kreist (0.0 - 0.5)
+      const RADIUS_FACTOR = 0.20; // kleinerer Wert = näher am Zentrum
+      const radius = Math.max(8, Math.min(item.offsetWidth, item.offsetHeight) * RADIUS_FACTOR);
+      const basePeriod = 1170; // Basis-Millisekunden pro Umdrehung
+      const period = basePeriod * getTempoMultiplier(); // Mit Tempo-Skill anpassen
       let start = performance.now();
       function orbit(now) {
         const t = now - start;
         const angle = ((t % period) / period) * Math.PI * 2;
-        const x = centerX + Math.cos(angle) * radius;
-        const y = centerY + Math.sin(angle) * radius;
-        floatingLupe.style.left = `${x}px`;
-        floatingLupe.style.top = `${y}px`;
+        const offsetX = Math.cos(angle) * radius;
+        const offsetY = Math.sin(angle) * radius;
+        floatingLupe.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
         floatingLupe._raf = requestAnimationFrame(orbit);
       }
       floatingLupe._raf = requestAnimationFrame(orbit);
