@@ -351,9 +351,9 @@ function getWeightedItemCount(boxType) {
   const totalSlots = columns * rows;
   
   // Bestimme Füllrate-Ziel basierend auf Box-Typ
-  // Box 1-3: 70% Durchschnitt, Box 4-7: 50% Durchschnitt
+  // Box 1-3: 70% Durchschnitt, Box 4-5: 50%, Box 6-7: 70%
   const boxNumber = parseInt(boxType.replace('Box#', ''));
-  const targetFillRate = (boxNumber <= 3) ? 0.7 : 0.5;
+  const targetFillRate = (boxNumber <= 3 || boxNumber >= 6) ? 0.7 : 0.5;
   
   // Normalverteilung um den Zielwert herum, begrenzt auf 20-100%
   // Verwende Box-Muller-Transformation für Normalverteilung
