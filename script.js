@@ -184,7 +184,7 @@ const shopStatUpgrades = {
     name: 'Wertsteigerung',
     icon: '💹',
     description: '+2% Item-Wert pro Stufe (stackbar)',
-    baseCost: 15000,
+    baseCost: 5000,
     costFactor: 1.5, // Kosten steigen multiplicativ je Stufe
     perLevel: { type: 'wealth', value: 0.02 }
   },
@@ -192,7 +192,7 @@ const shopStatUpgrades = {
     name: 'Glückstraining',
     icon: '🍀',
     description: '+1 Glückspunkt pro Stufe (stackbar)',
-    baseCost: 20000,
+    baseCost: 5000,
     costFactor: 1.6,
     perLevel: { type: 'luck', value: 1 }
   },
@@ -200,7 +200,7 @@ const shopStatUpgrades = {
     name: 'Effizienz-Training',
     icon: '⚡',
     description: '-2% Untersuchungszeit pro Stufe (stackbar)',
-    baseCost: 18000,
+    baseCost: 5000,
     costFactor: 1.55,
     perLevel: { type: 'tempo', value: 0.02 }
   }
