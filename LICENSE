@@ -1,34 +1,64 @@
-GNU GENERAL PUBLIC LICENSE
-Version 3, 29 June 2007
+CREATIVE COMMONS ATTRIBUTION-NONCOMMERCIAL-SHAREALIKE 4.0 INTERNATIONAL
 
 Copyright (C) 2025 REMP4GE175
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
+To view a copy of this license, visit:
+https://creativecommons.org/licenses/by-nc-sa/4.0/
 
 ---
 
-ADDITIONAL TERMS:
+YOU ARE FREE TO:
 
-This project ("Lootingsimulator") is a personal hobby project.
-While the code is open source under GPL-3.0, any derivative works
-must also be released under GPL-3.0 (copyleft principle).
+✅ Share — copy and redistribute the material in any medium or format
+✅ Adapt — remix, transform, and build upon the material
 
-This means:
-- ✅ You MAY view, modify, and distribute this code
-- ✅ You MAY use it for personal or commercial purposes
-- ✅ You MUST credit the original author (REMP4GE175)
-- ✅ Any modifications or derivative works MUST be released under GPL-3.0
-- ❌ You CANNOT take this code, modify it, and keep your version closed-source
+The licensor cannot revoke these freedoms as long as you follow the license terms.
 
-For the full GPL-3.0 license text, see: https://www.gnu.org/licenses/gpl-3.0.txt
+---
+
+UNDER THE FOLLOWING TERMS:
+
+📝 Attribution (BY)
+   You must give appropriate credit to the original author (REMP4GE175),
+   provide a link to the license, and indicate if changes were made.
+   You may do so in any reasonable manner, but not in any way that suggests
+   the licensor endorses you or your use.
+
+🚫 NonCommercial (NC)
+   You may NOT use the material for commercial purposes.
+   This means you cannot sell, monetize, or profit from this project
+   without explicit written permission from the author.
+
+♻️ ShareAlike (SA)
+   If you remix, transform, or build upon the material, you must distribute
+   your contributions under the same license (CC BY-NC-SA 4.0) as the original.
+
+⚠️ No additional restrictions
+   You may not apply legal terms or technological measures that legally restrict
+   others from doing anything the license permits.
+
+---
+
+WHAT THIS MEANS IN PRACTICE:
+
+✅ You CAN view, learn from, and study this code
+✅ You CAN fork and modify this project for personal/educational use
+✅ You CAN share your modifications (must use same license)
+✅ You MUST credit the original author (REMP4GE175)
+❌ You CANNOT sell, monetize, or commercially exploit this project
+❌ You CANNOT use this in commercial products/services without permission
+
+---
+
+COMMERCIAL USE:
+
+If you wish to use this project commercially (e.g., selling, advertising, in-app purchases),
+please contact the author (REMP4GE175) for a separate commercial license agreement.
+
+The author reserves all commercial rights to this work.
+
+---
+
+Full license text: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
