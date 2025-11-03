@@ -862,10 +862,13 @@ function getRandomItem(boxType) {
       const pool = itemPools[rarity] || itemPools.Common;
       const item = weightedSampleByDropWeight(pool);
       // Item-Wert mit Wohlstand-Multiplikator anwenden
+      const baseValue = item.value;
+      const multiplier = getValueMultiplier();
       const modifiedItem = { 
         ...item, 
         rarity,
-        value: Math.floor(item.value * getValueMultiplier())
+        baseValue: baseValue,
+        value: Math.floor(baseValue * multiplier)
       };
       return modifiedItem;
     }
@@ -1249,7 +1252,7 @@ function initLootTooltip() {
   __lootTooltipEl = tip;
 }
 
-function setTooltipContent({ name = '', value = null, description = '', rarity = 'Common' }) {
+function setTooltipContent({ name = '', value = null, baseValue = null, description = '', rarity = 'Common' }) {
   if (!__lootTooltipEl) return;
   __lootTooltipEl.style.setProperty('--tip-accent', colors[rarity] || '#888');
   __lootTooltipEl.innerHTML = '';
@@ -1261,7 +1264,19 @@ function setTooltipContent({ name = '', value = null, description = '', rarity =
   rarityEl.textContent = displayRarityName(rarity);
   const valueEl = document.createElement('div');
   valueEl.className = 'tip-value';
-  valueEl.textContent = value != null ? `${Number(value || 0).toLocaleString('de-DE')} 💰` : 'Wert unbekannt';
+  
+  // Zeige Basiswert + Bonus (in Grün) falls vorhanden
+  if (value != null && baseValue != null && baseValue > 0) {
+    const bonus = value - baseValue;
+    if (bonus > 0) {
+      valueEl.innerHTML = `${Number(baseValue).toLocaleString('de-DE')} <span style="color: #0f0;">+${Number(bonus).toLocaleString('de-DE')}</span> 💰`;
+    } else {
+      valueEl.textContent = `${Number(value).toLocaleString('de-DE')} 💰`;
+    }
+  } else {
+    valueEl.textContent = value != null ? `${Number(value || 0).toLocaleString('de-DE')} 💰` : 'Wert unbekannt';
+  }
+  
   const descEl = document.createElement('div');
   descEl.className = 'tip-desc';
   descEl.textContent = description || '';
@@ -2165,7 +2180,14 @@ dom.openBtn.addEventListener('click', async () => {
             // Normale gewichtete Auswahl
             itm = weightedSampleByDropWeight(pool) || sample(pool);
           }
-          return { ...itm, rarity: rar, value: Math.floor((itm.value || 0) * getValueMultiplier()) };
+          const baseValue = itm.value || 0;
+          const multiplier = getValueMultiplier();
+          return { 
+            ...itm, 
+            rarity: rar, 
+            baseValue: baseValue,
+            value: Math.floor(baseValue * multiplier) 
+          };
         })()
       : getRandomItem(openBoxType);
     const name = pulledItem.name || 'Unbekannter Gegenstand';
@@ -2284,10 +2306,11 @@ dom.openBtn.addEventListener('click', async () => {
     // Icon einfügen
     item.appendChild(iconImg);
 
-    // Schöner Tooltip im Lootfenster: Name + Wert + Beschreibung
+    // Schöner Tooltip im Lootfenster: Name + Wert (Basis + Bonus) + Beschreibung
     attachTooltip(item, {
       name: pulledItem.name,
       value: pulledItem.value,
+      baseValue: pulledItem.baseValue,
       description: pulledItem.description || '',
       rarity: pulledItem.rarity || 'Common'
     });
