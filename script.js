@@ -439,11 +439,11 @@ const boxConfigs = {
     columns: 2,
     rows: 2,
     weights: {
-      Common: 92.5,
-      Rare: 7,
-      Epic: 0.5,
-      Legendary: 0,
-      Mythisch: 0
+      Common: 75.00,
+      Rare: 20.00,
+      Epic: 5.00,
+      Legendary: 0.00,
+      Mythisch: 0.00
     }
   },
   "Box#2": {
@@ -451,11 +451,71 @@ const boxConfigs = {
     columns: 3,
     rows: 2,
     weights: {
-      Common: 75,
-      Rare: 22,
-      Epic: 2.95,
-      Legendary: 0.05,
-      Mythisch: 0
+      Common: 66.00,
+      Rare: 25.00,
+      Epic: 7.00,
+      Legendary: 1.00,
+      Mythisch: 0.10
+    }
+  },
+  "Box#3": {
+    cost: 1000,
+    columns: 4,
+    rows: 2,
+    weights: {
+      Common: 57.00,
+      Rare: 28.00,
+      Epic: 10.00,
+      Legendary: 2.00,
+      Mythisch: 0.30
+    }
+  },
+  "Box#4": {
+    cost: 15000,
+    columns: 4,
+    rows: 3,
+    weights: {
+      Common: 46.00,
+      Rare: 35.00,
+      Epic: 14.00,
+      Legendary: 3.50,
+      Mythisch: 0.50
+    }
+  },
+  "Box#5": {
+    cost: 30000,
+    columns: 5,
+    rows: 3,
+    weights: {
+      Common: 35.00,
+      Rare: 35.00,
+      Epic: 18.00,
+      Legendary: 5.50,
+      Mythisch: 0.70
+    }
+  },
+  "Box#6": {
+    cost: 50000,
+    columns: 6,
+    rows: 3,
+    weights: {
+      Common: 25.00,
+      Rare: 30.00,
+      Epic: 30.00,
+      Legendary: 7.50,
+      Mythisch: 0.90
+    }
+  },
+  "Box#7": {
+    cost: 100000,
+    columns: 6,
+    rows: 4,
+    weights: {
+      Common: 15.00,
+      Rare: 25.00,
+      Epic: 50.00,
+      Legendary: 9.00,
+      Mythisch: 1.00
     }
   },
   "Testbox": {
@@ -469,66 +529,6 @@ const boxConfigs = {
       Epic: 20,
       Legendary: 20,
       Mythisch: 20
-    }
-  },
-  "Box#3": {
-    cost: 1000,
-    columns: 4,
-    rows: 2,
-    weights: {
-      Common: 60,
-      Rare: 35,
-      Epic: 4.835,
-      Legendary: 0.075,
-      Mythisch: 0.015
-    }
-  },
-  "Box#4": {
-    cost: 15000,
-    columns: 4,
-    rows: 3,
-    weights: {
-      Common: 50,
-      Rare: 35,
-      Epic: 14.4375,
-      Legendary: 0.2625,
-      Mythisch: 0.0375
-    }
-  },
-  "Box#5": {
-    cost: 50000,
-    columns: 5,
-    rows: 3,
-    weights: {
-      Common: 0,
-      Rare: 20,
-      Epic: 79.2125,
-      Legendary: 0.675,
-      Mythisch: 0.1125
-    }
-  },
-  "Box#6": {
-    cost: 100000,
-    columns: 6,
-    rows: 3,
-    weights: {
-      Common: 0,
-      Rare: 15,
-      Epic: 82.5,
-      Legendary: 2.2,
-      Mythisch: 0.3
-    }
-  },
-  "Box#7": {
-    cost: 250000,
-    columns: 6,
-    rows: 4,
-    weights: {
-      Common: 0,
-      Rare: 10,
-      Epic: 84.25,
-      Legendary: 5,
-      Mythisch: 0.75
     }
   },
   // Schlüssel-Räume: spezielle Räume, die nur über Schlüssel zugänglich sind
@@ -717,39 +717,22 @@ function applyLuckBonus(weights, boxType) {
 
   const modifiedWeights = { ...weights };
 
-  // Box-spezifischer Multiplikator: frühe Boxen (1-5) profitieren stärker von Glück
+  // Box-spezifischer Multiplikator: absteigend von Box 1 bis Box 7
+  // Box 1: Faktor 1.0, Box 2: 0.9, Box 3: 0.8, Box 4: 0.7, Box 5: 0.6, Box 6: 0.5, Box 7: 0.4
   const boxNumber = parseInt((boxType || 'Box#1').replace(/[^\d]/g, '')) || 1;
   let boxMultiplier = 1.0;
-  if (boxNumber <= 5) {
-    // Box 1-5: 50% stärkerer Glück-Effekt
-    boxMultiplier = 1.5;
-  } else {
-    // Box 6-7: Standard-Effekt (Premium-Boxen bleiben balanced)
-    boxMultiplier = 1.0;
+  if (boxNumber >= 1 && boxNumber <= 7) {
+    boxMultiplier = 1.1 - (boxNumber * 0.1); // Box 1: 1.0, Box 2: 0.9, ..., Box 7: 0.4
   }
 
   // Pro-Punkt-Raten: keine harten Caps mehr, damit Glück unbegrenzt skaliert
   // Die prozentuale Verschiebung sorgt von selbst für abnehmende Zuwächse
-  const crRate = 0.01 * g * boxMultiplier;    // 1% (bzw. 1,5% bei Box 1-5) von Common -> Rare pro Glück-Punkt
-  const reRate = 0.0075 * g * boxMultiplier;  // 0,75% (bzw. 1,125% bei Box 1-5) von Rare -> Epic pro Glück-Punkt
-  const elRate = 0.005 * g * boxMultiplier;   // 0,5% (bzw. 0,75% bei Box 1-5) von Epic -> Legendary pro Glück-Punkt
+  const crRate = 0.01 * g * boxMultiplier;    // von Common -> Rare
+  const reRate = 0.0075 * g * boxMultiplier;  // von Rare -> Epic
+  const elRate = 0.005 * g * boxMultiplier;   // von Epic -> Legendary
   
-  // Legendary -> Mythisch: Box-spezifische Logik
-  let lmRate = 0;
-  
-  if (boxType === 'Box#1') {
-    // Box 1: KEINE Mythisch-Verschiebung erlaubt
-    lmRate = 0;
-  } else if (boxType === 'Box#2') {
-    // Box 2: sehr geringe Mythisch-Zuwächse (auch mit Bonus)
-    lmRate = 0.0001 * g * boxMultiplier;
-  } else if (boxNumber <= 5) {
-    // Box 3-5: moderater Zuwachs mit Box-Bonus
-    lmRate = 0.0025 * g * 0.4 * boxMultiplier;
-  } else {
-    // Box 6-7: Standard-Rate ohne Extra-Bonus
-    lmRate = 0.0025 * g * 0.4;
-  }
+  // Legendary -> Mythisch: einheitliche Rate für alle Boxen
+  const lmRate = 0.0025 * g * boxMultiplier;
 
   // Common -> Rare
   if (modifiedWeights.Common && modifiedWeights.Common > 0) {
@@ -772,8 +755,8 @@ function applyLuckBonus(weights, boxType) {
     modifiedWeights.Legendary = (modifiedWeights.Legendary || 0) + shiftEL;
   }
 
-  // Legendary -> Mythisch (nur wenn lmRate > 0)
-  if (lmRate > 0 && modifiedWeights.Legendary && modifiedWeights.Legendary > 0) {
+  // Legendary -> Mythisch
+  if (modifiedWeights.Legendary && modifiedWeights.Legendary > 0) {
     const shiftLM = modifiedWeights.Legendary * lmRate;
     modifiedWeights.Legendary -= shiftLM;
     modifiedWeights.Mythisch = (modifiedWeights.Mythisch || 0) + shiftLM;
@@ -805,25 +788,32 @@ function getWeightedItemCount(boxType) {
   const boxNumber = parseInt(boxType.replace('Box#', ''));
   const targetFillRate = (boxNumber <= 3 || boxNumber >= 6) ? 0.6 : 0.5;
   
+  // Glücksbonus: +2% Füllrate pro Glückspunkt (inkl. Boosts)
+  let g = (skills.glueck || 0) + (statUpgradesLevels.luck || 0);
+  if (activeBoosts.rarityBoostUses > 0) {
+    g = g * (1 + activeBoosts.rarityBoost);
+  }
+  const luckFillBonus = 0.02 * g; // +2% pro Glückspunkt
+
   // Normalverteilung um den Zielwert herum, begrenzt auf 20-100%
   // Verwende Box-Muller-Transformation für Normalverteilung
   const u1 = Math.random();
   const u2 = Math.random();
   const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
-  
+
   // z0 ist normalverteilt mit mean=0, stddev=1
   // Skaliere auf mean=targetFillRate, stddev=12% (geringere Streuung)
-  let fillRate = targetFillRate + (z0 * 0.12);
-  
+  let fillRate = targetFillRate + luckFillBonus + (z0 * 0.12);
+
   // Begrenze auf 20-100%
   fillRate = Math.max(0.2, Math.min(1.0, fillRate));
-  
+
   // Berechne Anzahl Items
   let itemCount = Math.max(1, Math.floor(totalSlots * fillRate));
-  
+
   // Maximal alle Slots füllen
   itemCount = Math.min(itemCount, totalSlots);
-  
+
   return itemCount;
 }
 // Wählt ein Item basierend auf den Gewichten der Raritäten aus.
@@ -832,22 +822,6 @@ function getRandomItem(boxType) {
   const baseWeights = boxConfigs[boxType].weights;
   const weights = applyLuckBonus(baseWeights, boxType); // Glück-Skill anwenden (mit boxType)
 
-  // Box 1: komplett keine Mythischen Items
-  if (boxType === 'Box#1') {
-    if (weights.Mythisch && weights.Mythisch > 0) {
-      weights.Legendary = (weights.Legendary || 0) + weights.Mythisch;
-      weights.Mythisch = 0;
-    }
-  }
-  
-  // Box 2: maximal 0,05% Mythisch bei 20 Glück
-  if (boxType === 'Box#2') {
-    if (weights.Mythisch && weights.Mythisch > 0.05) {
-      const excess = weights.Mythisch - 0.05;
-      weights.Legendary = (weights.Legendary || 0) + excess;
-      weights.Mythisch = 0.05;
-    }
-  }
   const totalWeight = rarities.reduce((sum, r) => sum + (weights[r] || 0), 0);
   if (totalWeight <= 0) {
     // Fallback, falls fehlerhafte Konfiguration
