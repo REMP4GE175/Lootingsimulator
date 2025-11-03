@@ -185,7 +185,7 @@ const shopStatUpgrades = {
     icon: '💹',
     description: '+2% Item-Wert pro Stufe (stackbar)',
     baseCost: 5000,
-    costFactor: 1.5, // Kosten steigen multiplicativ je Stufe
+    costFactor: 1.6, // Kosten steigen multiplicativ je Stufe
     perLevel: { type: 'wealth', value: 0.02 }
   },
   luck: {
@@ -201,7 +201,7 @@ const shopStatUpgrades = {
     icon: '⚡',
     description: '-2% Untersuchungszeit pro Stufe (stackbar)',
     baseCost: 5000,
-    costFactor: 1.55,
+    costFactor: 1.6,
     perLevel: { type: 'tempo', value: 0.02 }
   }
 };
