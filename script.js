@@ -1265,11 +1265,11 @@ function setTooltipContent({ name = '', value = null, baseValue = null, descript
   const valueEl = document.createElement('div');
   valueEl.className = 'tip-value';
   
-  // Zeige Basiswert + Bonus (in Grün) falls vorhanden
+  // Zeige Gesamtwert (Basis + Bonus) falls Bonus vorhanden
   if (value != null && baseValue != null && baseValue > 0) {
     const bonus = value - baseValue;
     if (bonus > 0) {
-      valueEl.innerHTML = `${Number(baseValue).toLocaleString('de-DE')} <span style="color: #0f0;">+${Number(bonus).toLocaleString('de-DE')}</span> 💰`;
+      valueEl.innerHTML = `${Number(value).toLocaleString('de-DE')} 💰 <span style="color: #888; font-size: 0.9em;">(${Number(baseValue).toLocaleString('de-DE')} + <span style="color: #0f0;">${Number(bonus).toLocaleString('de-DE')}</span>)</span>`;
     } else {
       valueEl.textContent = `${Number(value).toLocaleString('de-DE')} 💰`;
     }
