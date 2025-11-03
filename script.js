@@ -60,12 +60,45 @@ function getItemImagePath(iconFileName, rarity) {
 function getAlternateIconNames(iconFileName) {
   const name = String(iconFileName || '');
   const alts = [];
+  // Ermittle Basename und Extension
+  const m = name.match(/\.(png|jpg|jpeg|gif|webp)$/i);
+  const ext = m ? m[0] : '';
+  const base = m ? name.slice(0, -ext.length) : name;
+
   // 1) Trailing Spaces vor Dateiendung entfernen: "...  .png" -> "....png"
   alts.push(name.replace(/\s+\.(png|jpg|jpeg|gif|webp)$/i, '.$1'));
-  // 2) Komplett in Kleinbuchstaben
+
+  // 2) Variante MIT einem Space vor der Extension (für Files wie "Einzelner Socke .png")
+  if (ext && !/\s$/.test(base)) {
+    alts.push(base + ' ' + ext);
+  }
+
+  // 3) Spaces zu Unterstrichen
+  if (ext) {
+    alts.push(base.replace(/\s+/g, '_') + ext);
+  } else {
+    alts.push(name.replace(/\s+/g, '_'));
+  }
+
+  // 4) Ohne jegliche Spaces
+  if (ext) {
+    alts.push(base.replace(/\s+/g, '') + ext);
+  } else {
+    alts.push(name.replace(/\s+/g, ''));
+  }
+
+  // 5) Komplett in Kleinbuchstaben
   alts.push(name.toLowerCase());
-  // 3) Kombination aus (1) und (2)
-  alts.push(name.replace(/\s+\.(png|jpg|jpeg|gif|webp)$/i, '.$1').toLowerCase());
+
+  // 6) Kombinationen der obigen Varianten in Kleinbuchstaben
+  const trimmedLower = name.replace(/\s+\.(png|jpg|jpeg|gif|webp)$/i, '.$1').toLowerCase();
+  alts.push(trimmedLower);
+  if (ext) {
+    alts.push((base + ' ' + ext).toLowerCase());
+    alts.push((base.replace(/\s+/g, '_') + ext).toLowerCase());
+    alts.push((base.replace(/\s+/g, '') + ext).toLowerCase());
+  }
+
   // Nur eindeutige Varianten zurückgeben, die sich vom Original unterscheiden
   const uniq = [];
   const seen = new Set([name]);
@@ -101,7 +134,7 @@ const stats = {
 
 // Titel-System: Level → Titel
 const titles = [
-  { level: 0, title: "Timmy" },
+  { level: 0, title: "little Timmy" },
   { level: 5, title: "Anfänger" },
   { level: 10, title: "Sammler" },
   { level: 15, title: "Lootgoblin" },
@@ -301,7 +334,7 @@ const itemPools = {
     { name: "Alter Schlüssel", icon: "Schlüssel.png", value: 23, description: "Passt nirgendwo rein." },
     { name: "Alte Eintrittskarte", icon: "Kinoticket.png", value: 19, description: "Von einem vergessenen Event." },
     { name: "Briefumschlag", icon: "Briefumschlag.png", value: 17, description: "Leer und vergilbt." },
-    { name: "Stempel", icon: "common_1.png", value: 27, description: "Ein alter Gummistempel." },
+    { name: "Stempel", icon: "Stempel.png", value: 27, description: "Ein alter Gummistempel." },
     { name: "Schere", icon: "Schere.png", value: 31, description: "Stumpf und verrostet." },
     { name: "Stift", icon: "Stift.png", value: 20, description: "Schreibt nicht mehr." },
     { name: "Schraube", icon: "Schraube.png", value: 22, description: "Eine einzelne Schraube." },
