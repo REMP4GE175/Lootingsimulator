@@ -132,7 +132,7 @@ const shopItems = {
     icon: "🌿",
     cost: 8000,
     type: "temp",
-    effect: { type: "rarityBoost", value: 1.5, uses: 3 }
+    effect: { type: "rarityBoost", value: 0.15, uses: 3 }
   },
   tempXPBoost: {
     name: "Wissenselixier",
