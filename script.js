@@ -717,11 +717,22 @@ function applyLuckBonus(weights, boxType) {
 
   const modifiedWeights = { ...weights };
 
+  // Box-spezifischer Multiplikator: frühe Boxen (1-5) profitieren stärker von Glück
+  const boxNumber = parseInt((boxType || 'Box#1').replace(/[^\d]/g, '')) || 1;
+  let boxMultiplier = 1.0;
+  if (boxNumber <= 5) {
+    // Box 1-5: 50% stärkerer Glück-Effekt
+    boxMultiplier = 1.5;
+  } else {
+    // Box 6-7: Standard-Effekt (Premium-Boxen bleiben balanced)
+    boxMultiplier = 1.0;
+  }
+
   // Pro-Punkt-Raten: keine harten Caps mehr, damit Glück unbegrenzt skaliert
   // Die prozentuale Verschiebung sorgt von selbst für abnehmende Zuwächse
-  const crRate = 0.01 * g;    // 1% von Common -> Rare pro Glück-Punkt
-  const reRate = 0.0075 * g;  // 0,75% von Rare -> Epic pro Glück-Punkt
-  const elRate = 0.005 * g;   // 0,5% von Epic -> Legendary pro Glück-Punkt
+  const crRate = 0.01 * g * boxMultiplier;    // 1% (bzw. 1,5% bei Box 1-5) von Common -> Rare pro Glück-Punkt
+  const reRate = 0.0075 * g * boxMultiplier;  // 0,75% (bzw. 1,125% bei Box 1-5) von Rare -> Epic pro Glück-Punkt
+  const elRate = 0.005 * g * boxMultiplier;   // 0,5% (bzw. 0,75% bei Box 1-5) von Epic -> Legendary pro Glück-Punkt
   
   // Legendary -> Mythisch: Box-spezifische Logik
   let lmRate = 0;
@@ -730,11 +741,14 @@ function applyLuckBonus(weights, boxType) {
     // Box 1: KEINE Mythisch-Verschiebung erlaubt
     lmRate = 0;
   } else if (boxType === 'Box#2') {
-    // Box 2: sehr geringe Mythisch-Zuwächse
-    lmRate = 0.0001 * g; // 0,01% von Legendary -> Mythisch pro Glück-Punkt
+    // Box 2: sehr geringe Mythisch-Zuwächse (auch mit Bonus)
+    lmRate = 0.0001 * g * boxMultiplier;
+  } else if (boxNumber <= 5) {
+    // Box 3-5: moderater Zuwachs mit Box-Bonus
+    lmRate = 0.0025 * g * 0.4 * boxMultiplier;
   } else {
-    // Box 3-7: moderater Zuwachs
-    lmRate = 0.0025 * g * 0.4; // 0,1% von Legendary -> Mythisch pro Glück-Punkt
+    // Box 6-7: Standard-Rate ohne Extra-Bonus
+    lmRate = 0.0025 * g * 0.4;
   }
 
   // Common -> Rare
