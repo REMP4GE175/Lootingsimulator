@@ -3,10 +3,43 @@
 <head>
   <meta charset="UTF-8">
   <title>Lootcontainer-Simulator</title>
-  <link rel="stylesheet" href="style.css">
+  <script>
+    (function() {
+      function inject(ver) {
+        try {
+          var v = ver ? ('?v=' + encodeURIComponent(ver)) : '';
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = 'style.css' + v;
+          document.head.appendChild(link);
+
+          var s = document.createElement('script');
+          s.src = 'script.js' + v;
+          s.defer = true;
+          document.head.appendChild(s);
+        } catch (e) {
+          // Fallback (sollte selten nötig sein)
+          var link2 = document.createElement('link');
+          link2.rel = 'stylesheet';
+          link2.href = 'style.css';
+          document.head.appendChild(link2);
+          var s2 = document.createElement('script');
+          s2.src = 'script.js';
+          s2.defer = true;
+          document.head.appendChild(s2);
+        }
+      }
+      try {
+        fetch('version.json', { cache: 'no-store' })
+          .then(function(r){ return r.ok ? r.json() : { version: null }; })
+          .then(function(meta){ inject(meta && (meta.version || meta.appVersion)); })
+          .catch(function(){ inject(null); });
+      } catch (e) { inject(null); }
+    })();
+  </script>
 </head>
 <body>
-  <h1>Lootingsimulator <span class="app-version-inline" aria-label="Version">v0.9</span></h1>
+  <h1>Lootingsimulat<span id="secretDevSwitch" class="secret-dev-switch" title=" ">o</span>r <span class="app-version-inline" aria-label="Version">v0.9</span></h1>
   
   <p id="balance">💰: 0</p>
 
@@ -14,9 +47,26 @@
   <!-- NEU: Alles in einem Wrapper -->
 
   <div id="containerArea">
-    <div id="containerWrapper">
-      <div id="overlay"></div>
-      <div id="lootContainer" class="container-grid"></div>
+    <div id="playRow">
+      <div id="containerWrapper">
+        <div id="overlay"></div>
+        <div id="lootContainer" class="container-grid"></div>
+      </div>
+      <div id="searchAnim" aria-hidden="true">
+        <div class="ground" aria-hidden="true"></div>
+        <div class="character idle" role="img" aria-label="Suchender">
+          <div class="head"></div>
+          <div class="body"></div>
+          <div class="arm left"></div>
+          <div class="arm right"></div>
+          <div class="leg left"></div>
+          <div class="leg right"></div>
+        </div>
+        <div class="chest" aria-hidden="true">
+          <div class="chest-body"></div>
+          <div class="chest-lid"></div>
+        </div>
+      </div>
     </div>
     <!-- Box-Auswahl unter dem Lootcontainer und über dem Open-Button -->
     <div id="boxSelectionWrapper">
@@ -28,13 +78,24 @@
         <button id="boxBtn5" data-box="Box#5">🎖️ Militärkoffer (250K 💰)</button>
         <button id="boxBtn6" data-box="Box#6">🔒 Safe (500K 💰)</button>
         <button id="boxBtn7" data-box="Box#7">🏦 Tresor (1M 💰)</button>
+        <button id="boxBtn8" data-box="Testbox">🧪 Testbox (DEV)</button>
       </div>
       <div id="iconButtons">
         <button id="statsBtn" title="Statistiken">📊</button>
         <button id="collectionBtn" title="Sammlung">📚</button>
+        <button id="devMoneyBtn" title="DEV: +1M 💰">💸</button>
       </div>
+        <div id="devToggleWrapper">
+          <label class="toggle-dev">
+            <input type="checkbox" id="toggleDev">
+            DEV anzeigen
+          </label>
+        </div>
     </div>
-    <button id="openBtn">Öffnen 🔑</button>
+    <div id="actionButtons">
+      <button id="shopBtn">🪙 Shop</button>
+      <button id="openBtn">Öffnen 🔑</button>
+    </div>
   </div>
 
 <!-- Level & XP Display -->
@@ -88,6 +149,19 @@
   </div>
 </div>
 
+<!-- Shop Modal -->
+<div id="shopModal" style="display:none;" class="overlay">
+  <div class="modal-content skill-modal">
+    <button id="closeShopBtn" class="close-btn">❌</button>
+    <h2>🪙 Shop</h2>
+    <p class="skill-points">Guthaben: <span id="shopBalance">0</span> 💰</p>
+    
+    <div id="shopContent">
+      <!-- Shop-Items werden hier dynamisch eingefügt -->
+    </div>
+  </div>
+</div>
+
 <!-- Stats Overlay -->
 <div id="statsOverlay" style="display:none;" class="overlay">
   <button id="closeStatsBtn">❌</button>
@@ -98,8 +172,9 @@
 <div id="collectionOverlay" style="display:none;" class="overlay">
   <button id="closeCollectionBtn">❌</button>
   <div id="collectionGrid" class="grid"></div>
+  <button id="resetBtn" class="reset-btn">🔄 Fortschritt zurücksetzen</button>
 </div>
 
-  <script src="script.js"></script>
+  
 </body>
 </html>

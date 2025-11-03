@@ -25,16 +25,66 @@ const glowStrength = {
   Mythisch: 1.00
 };
 
+// Bildpfad-Hilfen: Ab sofort liegen die Itembilder in Unterordnern je Rarität
+// Struktur: Itembilder/<Rarität-Ordner>/{Dateiname}
+// Mapping der Ingame-Raritäten (EN/DE gemischt) zu Ordnernamen (DE):
+//  - Common   -> Common
+//  - Rare     -> Selten
+//  - Epic     -> Episch
+//  - Legendary-> Legendär
+//  - Mythisch -> Mythisch
+const RARITY_FOLDER_MAP = {
+  Common: 'Common',
+  Rare: 'Selten',
+  Epic: 'Episch',
+  Legendary: 'Legendär',
+  Mythisch: 'Mythisch'
+};
+
+function getItemImagePath(iconFileName, rarity) {
+  // Erlaube absolute/komplette Pfade (z. B. für Schlüssel-Icons aus Common-Ordner)
+  if (typeof iconFileName === 'string') {
+    const s = iconFileName;
+    if (s.startsWith('Itembilder/') || s.startsWith('http') || s.startsWith('data:')) {
+      return s; // bereits vollständiger Pfad oder Data-URL
+    }
+  }
+  const folder = RARITY_FOLDER_MAP[rarity] || 'Common';
+  // Encode einzelne Segmente, damit Umlaute/Leerzeichen funktionieren
+  const encodedFolder = encodeURIComponent(folder);
+  const encodedFile = encodeURIComponent(iconFileName || '');
+  return `Itembilder/${encodedFolder}/${encodedFile}`;
+}
+
+// Liefert alternative Dateinamen-Varianten, falls kleine Abweichungen existieren
+function getAlternateIconNames(iconFileName) {
+  const name = String(iconFileName || '');
+  const alts = [];
+  // 1) Trailing Spaces vor Dateiendung entfernen: "...  .png" -> "....png"
+  alts.push(name.replace(/\s+\.(png|jpg|jpeg|gif|webp)$/i, '.$1'));
+  // 2) Komplett in Kleinbuchstaben
+  alts.push(name.toLowerCase());
+  // 3) Kombination aus (1) und (2)
+  alts.push(name.replace(/\s+\.(png|jpg|jpeg|gif|webp)$/i, '.$1').toLowerCase());
+  // Nur eindeutige Varianten zurückgeben, die sich vom Original unterscheiden
+  const uniq = [];
+  const seen = new Set([name]);
+  for (const a of alts) {
+    if (!seen.has(a)) { uniq.push(a); seen.add(a); }
+  }
+  return uniq;
+}
+
 // ======= Level & Skill System =======
-let playerLevel = 1;
+let playerLevel = 0;
 let playerXP = 0;
 let skillPoints = 0;
 
 // Skill-Tree: 3 Zweige mit jeweils maximal 20/20/10 Punkten
 const skills = {
-  wohlstand: 0,   // Jeder Punkt: +5% Item-Wert (max 20 = +100%)
+  wohlstand: 0,   // Jeder Punkt: +3% Item-Wert (max 20 = +60%)
   glueck: 0,      // Jeder Punkt: erhöht Chancen auf seltene Items (max 20)
-  effizienz: 0    // Jeder Punkt: -5% Untersuchungszeit (max 10 = -50%)
+  effizienz: 0    // Jeder Punkt: -3,5% Untersuchungszeit (max 10 = -35%)
 };
 
 // ======= Statistik-Tracking =======
@@ -51,7 +101,7 @@ const stats = {
 
 // Titel-System: Level → Titel
 const titles = [
-  { level: 1, title: "Timmy" },
+  { level: 0, title: "Timmy" },
   { level: 5, title: "Anfänger" },
   { level: 10, title: "Sammler" },
   { level: 15, title: "Lootgoblin" },
@@ -62,10 +112,154 @@ const titles = [
   { level: 50, title: "Legende" }
 ];
 
+const MAX_LEVEL = 50;
+
+// ======= Shop System =======
+// Ausrüstung (permanent, einzelne Gegenstände)
+const shopItems = {
+  // Temporäre Boosts
+  tempValueBoost: {
+    name: "Glücksanhänger",
+    description: "Nächste 5 Öffnungen: +50% Item-Wert",
+    icon: "🍀",
+    cost: 5000,
+    type: "temp",
+    effect: { type: "valueBoost", value: 0.5, uses: 5 }
+  },
+  tempRarityBoost: {
+    name: "Vierblättriges Kleeblatt",
+    description: "Nächste 3 Öffnungen: Erhöhte Rare+ Chancen",
+    icon: "🌿",
+    cost: 8000,
+    type: "temp",
+    effect: { type: "rarityBoost", value: 1.5, uses: 3 }
+  },
+  tempXPBoost: {
+    name: "Wissenselixier",
+    description: "Nächste 10 Öffnungen: +100% XP",
+    icon: "📚",
+    cost: 3000,
+    type: "temp",
+    effect: { type: "xpBoost", value: 1.0, uses: 10 }
+  },
+  
+  // Permanente Upgrades
+  permSlotIncrease: {
+    name: "Flinke Handschuhe",
+    description: "dauerhaft +10% schnelleres Durchsuchen",
+    icon: "🧤",
+    cost: 25000,
+    type: "perm",
+    effect: { type: "permTempoBoost", value: 0.10 }
+  },
+  permValueBoost: {
+    name: "Händler-Lizenz",
+    description: "dauerhaft +10% erhöhter Item-Wert",
+    icon: "💼",
+    cost: 50000,
+    type: "perm",
+    effect: { type: "permValueBoost", value: 0.1 }
+  },
+  permXPBoost: {
+    name: "Erfahrungs-Amulett",
+    description: "dauerhaft +25% erhöhter XP-Gewinn",
+    icon: "⚡",
+    cost: 40000,
+    type: "perm",
+    effect: { type: "permXPBoost", value: 0.25 }
+  },
+  permPotionBelt: {
+    name: "Trankgürtel",
+    description: "+1 Aufladung pro Kauf. +Quickslots außerhalb des Shops.",
+    icon: "🧪",
+    cost: 30000,
+    type: "perm",
+    effect: { type: "permPotionBelt", value: 1 }
+  }
+};
+
+// Stackbare Status-Upgrades (ähnlich Skilltree, aber mit 💰 kaufbar und steigenden Kosten)
+const shopStatUpgrades = {
+  wealth: {
+    name: 'Wertsteigerung',
+    icon: '💹',
+    description: '+2% Item-Wert pro Stufe (stackbar)',
+    baseCost: 15000,
+    costFactor: 1.5, // Kosten steigen multiplicativ je Stufe
+    perLevel: { type: 'wealth', value: 0.02 }
+  },
+  luck: {
+    name: 'Glückstraining',
+    icon: '🍀',
+    description: '+1 Glückspunkt pro Stufe (stackbar)',
+    baseCost: 20000,
+    costFactor: 1.6,
+    perLevel: { type: 'luck', value: 1 }
+  },
+  tempo: {
+    name: 'Effizienz-Training',
+    icon: '⚡',
+    description: '-2% Untersuchungszeit pro Stufe (stackbar)',
+    baseCost: 18000,
+    costFactor: 1.55,
+    perLevel: { type: 'tempo', value: 0.02 }
+  }
+};
+
+// Fortschritt/Levelstände der stackbaren Status-Upgrades
+let statUpgradesLevels = {
+  wealth: 0,
+  luck: 0,
+  tempo: 0
+};
+
+function getStatUpgradeCost(key) {
+  const cfg = shopStatUpgrades[key];
+  const lvl = statUpgradesLevels[key] || 0;
+  if (!cfg) return Infinity;
+  return Math.round(cfg.baseCost * Math.pow(cfg.costFactor, lvl));
+}
+
+// Aktive temporäre Boosts
+let activeBoosts = {
+  valueBoost: 0,
+  rarityBoost: 0,
+  xpBoost: 0,
+  valueBoostUses: 0,
+  rarityBoostUses: 0,
+  xpBoostUses: 0
+};
+
+// Permanente Upgrades (Zähler)
+let permanentUpgrades = {
+  permTempoBoost: 0,
+  permValueBoost: 0,
+  permXPBoost: 0,
+  permPotionBelt: 0
+};
+
+// Gekaufte Items (für "Ausverkauft"-Status bei Einmal-Items)
+let purchasedItems = new Set();
+
+// ======= Schlüssel-System (pro Rarität) =======
+// Inventar der Schlüssel pro Rarität
+let keysInventory = {
+  Common: 0,
+  Rare: 0,
+  Epic: 0,
+  Legendary: 0,
+  Mythisch: 0
+};
+// Einmal-Flag, um die nächste Öffnung kostenlos zu machen (durch Schlüssel)
+let __nextOpenIsFree = false;
+
 // Berechnet benötigte XP für nächstes Level (exponentielle Kurve)
 function getXPForLevel(level) {
-  // Stretched XP curve: higher base and exponent for slower early levels
-  return Math.floor(800 * Math.pow(1.22, level - 1));
+  // Slightly slower curve: raises required XP per level a bit more than before
+  // Previously: 500 * 1.18^(L-1) → Now: 500 * 1.21^(L-1)
+  // Level cap at 50
+  if (level > MAX_LEVEL) return Infinity;
+  return Math.floor(500 * Math.pow(1.21, level));
 }
 
 // Gibt aktuellen Titel basierend auf Level zurück
@@ -84,6 +278,8 @@ function getCurrentTitle() {
 // Jedes Item sollte mindestens name, icon, value und description haben.
 const itemPools = {
   Common: [
+    // Schlüssel (Common) – sehr selten innerhalb der Common-Rarität
+    { name: "Schlüssel: Gewöhnlich", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen gewöhnlichen Raum mit Common-lastigen Loot.", isKey: true, dropWeight: 0.12 },
     { name: "Rusty Coin", icon: "rusty coin.png", value: 15, description: "Ein alter, wertloser Münzfund." },
     { name: "Holzbrett", icon: "Holzbrett.png", value: 20, description: "Nicht mal als Waffe zu gebrauchen." },
     { name: "Taschentuch", icon: "Taschentuch.png", value: 18, description: "Ein gebrauchtes Stück Stoff." },
@@ -92,28 +288,149 @@ const itemPools = {
     { name: "fischgräte", icon: "Gräte.png", value: 30, description: "Beschreibung Common_1." },
     { name: "Eichel", icon: "Eichel.png", value: 28, description: "Beschreibung Common_1." },
     { name: "Göffel", icon: "Göffel.png", value: 35, description: "Beschreibung Common_1." },
-  // Falls ein Item keinen Namen hat, verwenden wir einen Platzhalter.
-  { name: "Unbekannter Gegenstand", icon: "common_1.png", value: 40, description: "Ein unbekannter Fund." },
-    { name: "Dennis", icon: "Dennis.png", value: 32, description: "Beschreibung Common_1." }
-
+    { name: "Leere Karte", icon: "leere Karte.png", value: 32, description: "Beschreibung Common_1." },
+    { name: "kaputte Brille", icon: "kaputte Brille.png", value: 24, description: "Eine kaputte Brille ohne Gläser." },
+    { name: "Knopf", icon: "Knopf.png", value: 16, description: "Ein einzelner Knopf von einem Hemd." },
+    { name: "Korken", icon: "Korken.png", value: 19, description: "Ein alter Flaschenkorken." },
+    { name: "Seil", icon: "Seil.png", value: 26, description: "Ein kurzes, ausgefranstes Seil." },
+    { name: "Stofflappen", icon: "Stofflappen.png", value: 17, description: "Ein schmutziger Lappen." },
+    { name: "Metallschrott", icon: "Metallschrott.png", value: 29, description: "Ein rostiges Stück Metall." },
+    { name: "Leere Dose", icon: "Leere Dose.png", value: 21, description: "Eine zerbeulte, leere Dose." },
+    { name: "Einzelner Socke", icon: "Einzelner Socke.png", value: 20, description: "Wo ist der andere hin?" },
+    { name: "Gummiband", icon: "Gummiband.png", value: 18, description: "Ein ausgeleiertes Haargummi." },
+    { name: "Alter Schlüssel", icon: "Schlüssel.png", value: 23, description: "Passt nirgendwo rein." },
+    { name: "Alte Eintrittskarte", icon: "Kinoticket.png", value: 19, description: "Von einem vergessenen Event." },
+    { name: "Briefumschlag", icon: "Briefumschlag.png", value: 17, description: "Leer und vergilbt." },
+    { name: "Stempel", icon: "common_1.png", value: 27, description: "Ein alter Gummistempel." },
+    { name: "Schere", icon: "Schere.png", value: 31, description: "Stumpf und verrostet." },
+    { name: "Stift", icon: "Stift.png", value: 20, description: "Schreibt nicht mehr." },
+    { name: "Schraube", icon: "Schraube.png", value: 22, description: "Eine einzelne Schraube." },
+    { name: "Mutter & Bolzen", icon: "Muttern und Bolzen.png", value: 25, description: "Passt perfekt zusammen." },
+    { name: "Draht", icon: "Draht.png", value: 24, description: "Ein verbogenes Stück Draht." },
+    { name: "schraubendreher", icon: "Schraubendreher.png", value: 28, description: "Für winzige Schrauben." },
+    { name: "Leerer Milchkarton", icon: "Milchkarton.png", value: 18, description: "Riecht leicht säuerlich." },
+    { name: "Plastikflasche", icon: "Plastikflasche.png", value: 19, description: "Eine leere Wasserflasche." },
+    { name: "Zigarettenstummel", icon: "Zigarettenstummel.png", value: 15, description: "Eklig und nutzlos." },
+    { name: "Kaffeefilter", icon: "Kaffeefilter.png", value: 17, description: "Gebraucht und fleckig." },
+    { name: "Teebeutel", icon: "Teebeutel.png", value: 16, description: "Längst durchgezogen." },
+    { name: "Wäscheklammer", icon: "Wäscheklammer.png", value: 8, description: "Eine Handvoll aus Plastik." },
+    { name: "Plastiktüte", icon: "Plastiktüte.png", value: 4, description: "Vom Supermarkt, mehrfach verwendet." },
+    { name: "Büroklammer", icon: "Büroklammer.png", value: 6, description: "Eine verbogene Metallklammer." },
+    { name: "Radiergummi", icon: "Radiergummi.png", value: 9, description: "Hart und brüchig geworden." },
+    { name: "Reißzwecke", icon: "common_1.png", value: 6, description: "Immer noch spitz." },
+    { name: "Zahnstocher", icon: "common_1.png", value: 3, description: "Eine Handvoll Holzstäbchen." },
+    { name: "Schallplattenhülle", icon: "plattenhuelle.png", value: 25, description: "Ohne Platte, aber mit Artwork." }
   ],
   Rare: [
+    // Schlüssel (Rare) – seltener als Common-Schlüssel
+    { name: "Schlüssel: Selten", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen seltenen Raum mit Rare-lastigen Loot.", isKey: true, dropWeight: 0.04 },
     { name: "Silver Ring", icon: "silver_ring.png", value: 120, description: "Ein hübscher Ring mit leichtem Glanz." },
-    { name: "Traveler's Map", icon: "map.png", value: 250, description: "Zeigt vergessene Wege." }
+    { name: "Traveler's Map", icon: "map.png", value: 250, description: "Zeigt vergessene Wege." },
+    { name: "Schachtel Zigaretten", icon: "zigaretten.png", value: 180, description: "Eine volle Packung, noch original verschweißt." },
+    { name: "Kartenspiel", icon: "kartenspiel.png", value: 150, description: "Ein klassisches Deck mit aufwendigem Design." },
+    { name: "Vintage-Feuerzeug", icon: "feuerzeug.png", value: 140, description: "Ein Zippo mit eingraviertem Datum." },
+    { name: "Alte Armbanduhr", icon: "armbanduhr.png", value: 200, description: "Mechanisch, läuft noch präzise." },
+    { name: "Lederbrieftasche", icon: "brieftasche.png", value: 130, description: "Hochwertig verarbeitet, leicht abgenutzt." },
+    { name: "Schweizer Taschenmesser", icon: "taschenmesser.png", value: 180, description: "Mit allen wichtigen Werkzeugen." },
+    { name: "Briefmarkensammlung", icon: "briefmarken.png", value: 220, description: "Seltene Exemplare aus den 1950ern." },
+    { name: "Silbermünzen", icon: "silbermuenzen.png", value: 190, description: "Eine Handvoll alter Gedenkmünzen." },
+    { name: "Digitalkamera", icon: "kamera.png", value: 240, description: "Alte Profi-Kamera, funktioniert noch." },
+    { name: "Taschenlampe (LED)", icon: "taschenlampe.png", value: 120, description: "Extrem hell, militärische Qualität." },
+    { name: "Multimeter", icon: "multimeter.png", value: 150, description: "Für alle elektronischen Messungen." },
+    { name: "Taschenuhr", icon: "taschenuhr.png", value: 260, description: "Goldüberzogen, mit Kette." },
+    { name: "Silberkette", icon: "silberkette.png", value: 180, description: "Fein gearbeitet, leicht angelaufen." },
+    { name: "Manschettenknöpfe", icon: "manschettenknoepfe.png", value: 170, description: "Elegante Knöpfe mit Gravur." },
+    { name: "Brosche", icon: "brosche.png", value: 160, description: "Mit kleinem Edelstein verziert." },
+    { name: "Retro-Spielzeug", icon: "spielzeug.png", value: 200, description: "Ein Blechroboter aus den 70ern." },
+    { name: "Postkarten-Sammlung", icon: "postkarten.png", value: 140, description: "Aus aller Welt, teilweise frankiert." },
+    { name: "Comic-Heft", icon: "comic.png", value: 190, description: "Erste Ausgabe, leicht vergilbt." },
+    { name: "USB-Stick", icon: "usb.png", value: 120, description: "8GB, mit alten Fotos." },
+    { name: "Kopfhörer", icon: "kopfhoerer.png", value: 150, description: "Over-Ear, noch funktionsfähig." },
+    { name: "Wecker (Analog)", icon: "wecker.png", value: 140, description: "Mit lautem Klingeln." },
+    { name: "Taschenrechner", icon: "taschenrechner.png", value: 110, description: "Solar-betrieben, funktioniert noch." },
+    { name: "Zange", icon: "zange.png", value: 180, description: "Kombinationszange in gutem Zustand." },
+    { name: "Hammer", icon: "hammer.png", value: 170, description: "Kleiner Schlosserhammer." },
+    { name: "Maßband", icon: "massband.png", value: 130, description: "5 Meter, etwas ausgeleiert." },
+    { name: "Schraubenschlüssel", icon: "schraubenschluessel.png", value: 160, description: "Verstellbar, leicht rostig." },
+    { name: "Sonnenbrille", icon: "sonnenbrille.png", value: 150, description: "Designer-Imitat, cooles Modell." },
+    { name: "Portemonnaie", icon: "portemonnaie.png", value: 190, description: "Leder, mit initialen Prägung." }
   ],
   Epic: [
+    // Schlüssel (Epic)
+    { name: "Schlüssel: Episch", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen epischen Raum mit Epic-lastigen Loot.", isKey: true, dropWeight: 0.03 },
     { name: "Enchanted Scroll", icon: "scroll.png", value: 600, description: "Ein Zauber, der nur einmal wirkt." },
-    { name: "Phoenix Feather", icon: "feather.png", value: 1200, description: "Glüht leicht in deiner Hand." }
+    { name: "Phoenix Feather", icon: "feather.png", value: 1200, description: "Glüht leicht in deiner Hand." },
+    { name: "Vinyl-Schallplatte", icon: "vinyl.png", value: 800, description: "Limited Edition, noch versiegelt." },
+    { name: "Perlenkette", icon: "perlenkette.png", value: 950, description: "Echte Süßwasserperlen." },
+    { name: "Bernsteinanhänger", icon: "bernstein.png", value: 1100, description: "Mit eingeschlossenem Insekt." },
+    { name: "Antike Schreibfeder", icon: "schreibfeder.png", value: 750, description: "Mit echtem Tintenfass." },
+    { name: "Goldkette", icon: "goldkette.png", value: 1000, description: "Schwere 18-Karat-Goldkette." },
+    { name: "Diamantring", icon: "diamantring.png", value: 1400, description: "Kleiner, aber echter Diamant." },
+    { name: "Smaragd-Ohrringe", icon: "smaragd_ohrringe.png", value: 1150, description: "Facettierte grüne Edelsteine." },
+    { name: "Rubinanhänger", icon: "rubin.png", value: 1300, description: "Tiefrotes Juwel in Silberfassung." },
+    { name: "Sextant", icon: "sextant.png", value: 900, description: "Navigationsgerät aus Messing." },
+    { name: "Taschenuhr (Antik)", icon: "taschenuhr_antik.png", value: 1100, description: "Mit aufwendiger Gravur, funktioniert noch." },
+    { name: "Porzellanfigur", icon: "porzellan.png", value: 850, description: "Meißener Porzellan, feiner Riss." },
+    { name: "Alte Bibel", icon: "bibel.png", value: 950, description: "Ledereinband, handgeschrieben, aus dem 19. Jahrhundert." },
+    { name: "Signiertes Buch", icon: "signiertes_buch.png", value: 800, description: "Erstausgabe mit Autogramm." },
+    { name: "Vintage-Kamera", icon: "vintage_kamera.png", value: 1050, description: "Leica aus den 60ern, funktionsfähig." },
+    { name: "Röhrenradio", icon: "roehrenradio.png", value: 900, description: "Retro-Radio aus Holz, spielt noch." },
+    { name: "Schreibmaschine", icon: "schreibmaschine.png", value: 850, description: "Mechanische Underwood, alle Tasten funktionieren." },
+    { name: "Ölgemälde", icon: "oelgemaelde.png", value: 1200, description: "Signiertes Landschaftsbild, Rahmen vergoldet." },
+    { name: "Bronze-Statue", icon: "bronze_statue.png", value: 1100, description: "Kleine Figur, schwer und detailreich." },
+    { name: "Kristall-Vase", icon: "kristall_vase.png", value: 900, description: "Handgeschliffen, böhmisches Glas." },
+    { name: "Dolch (Antik)", icon: "dolch.png", value: 1000, description: "Zeremoniendolch mit Verzierungen." },
+    { name: "Militärkompass", icon: "militaerkompass.png", value: 700, description: "Aus dem 2. Weltkrieg, funktioniert noch." },
+    { name: "Orden & Medaille", icon: "orden.png", value: 950, description: "Militärische Auszeichnung mit Band." },
+    { name: "Pelzmantel", icon: "pelzmantel.png", value: 1300, description: "Vintage, ethisch fragwürdig, aber wertvoll." },
+    { name: "Katze im Karton", icon: "Floki.png", value: 1050, description: "Eine niedliche Katze, die es sich in einem Karton bequem gemacht hat." },
+    { name: "Katze in Katzenhöhle", icon: "Biene.png", value: 1000, description: "Eine zufriedene Katze, die in ihrer Höhle döst." },
+    { name: "Katze auf türkisem Stuhl", icon: "Simba.png", value: 1150, description: "Eine elegante Katze thront auf einem stilvollen türkisen Stuhl." }
   ],
   Legendary: [
+    // Schlüssel (Legendary) – sehr selten
+    { name: "Schlüssel: Legendär", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen legendären Raum mit Legendary-lastigen Loot.", isKey: true, dropWeight: 0.015 },
     { name: "Dragon Scale", icon: "dragon_scale.png", value: 6000, description: "Unzerstörbar und selten." },
-    { name: "Celestial Orb", icon: "orb.png", value: 12000, description: "Ein Relikt aus einer anderen Welt." }
+    { name: "Celestial Orb", icon: "orb.png", value: 12000, description: "Ein Relikt aus einer anderen Welt." },
+    { name: "Goldblock", icon: "goldblock.png", value: 8000, description: "Ein massiver Block aus reinem Gold." },
+    { name: "Golduhr", icon: "golduhr.png", value: 9500, description: "Eine prächtige Uhr aus Gold und Diamanten." },
+    { name: "Kronjuwel", icon: "kronjuwel.png", value: 11500, description: "Ein seltener Edelstein aus königlichem Besitz." },
+    { name: "Platinbarren", icon: "platinbarren.png", value: 11000, description: "Schwer, selten und äußerst wertvoll." },
+    { name: "Saphir-Diadem", icon: "saphir_diadem.png", value: 10500, description: "Mit tiefblauen Saphiren besetzt." },
+    { name: "Meteoritenfragment", icon: "meteorit.png", value: 9000, description: "Ein Stück aus dem All, magnetisch." },
+    { name: "Ritterrüstung (Antik)", icon: "ritterruestung.png", value: 10000, description: "Vollplatte, musealer Zustand." },
+    { name: "Meisterwerk-Gemälde", icon: "meisterwerk.png", value: 12000, description: "Ein signiertes Original eines Meisters." },
+    { name: "Schwarze Perle", icon: "schwarze_perle.png", value: 9800, description: "Seltene Perle mit tiefschwarzem Glanz." },
+    { name: "Kristallschädel", icon: "kristallschaedel.png", value: 10400, description: "Mysteriöses Artefakt aus Kristall." },
+    { name: "Königszepter", icon: "koenigszepter.png", value: 11200, description: "Symbol königlicher Macht, reich verziert." },
+    { name: "Reliquienschrein", icon: "reliquienschrein.png", value: 9200, description: "Vergoldeter Schrein mit heiliger Reliquie." },
+    { name: "Runenstein", icon: "runenstein.png", value: 8600, description: "Antiker Stein mit leuchtenden Runen." }
   ],
   Mythisch: [
+    // Schlüssel (Mythisch) – extrem selten
+    { name: "Schlüssel: Mythisch", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen mythischen Raum mit hochwertigem Loot.", isKey: true, dropWeight: 0.007 },
     { name: "Mystic Blade", icon: "mystic_blade.png", value: 80000, description: "Eine legendäre Klinge mit uralter Macht." },
-    { name: "Time Crystal", icon: "time_crystal.png", value: 250000, description: "Manipuliert die Zeit für einen Moment." }
+    { name: "Time Crystal", icon: "time_crystal.png", value: 250000, description: "Manipuliert die Zeit für einen Moment." },
+    { name: "Geheime Dokumente", icon: "geheime_dokumente.png", value: 150000, description: "Streng geheime Regierungsunterlagen." },
+    { name: "Philosophenstein", icon: "philosophenstein.png", value: 210000, description: "Verwandelt das Gewöhnliche in Gold." },
+    { name: "Singularitätskern", icon: "singularitaetskern.png", value: 240000, description: "Komprimierte Raumzeit in einer Kapsel." },
+    { name: "Ewige Flamme", icon: "ewige_flamme.png", value: 120000, description: "Brennt ohne jede Quelle weiter." },
+    { name: "Ätherisches Grimoire", icon: "aetherisches_grimoire.png", value: 175000, description: "Die Seiten ändern sich bei jedem Öffnen." },
+    { name: "Weltensextant", icon: "weltensextant.png", value: 160000, description: "Findet Wege zwischen Dimensionen." },
+    { name: "Schattenmantel", icon: "schattenmantel.png", value: 90000, description: "Lässt dich im Dunkel verschwinden." },
+    { name: "Zeitreisekompass", icon: "zeitkompass.png", value: 140000, description: "Zeigt nicht Norden, sondern Morgen." }
   ]
 };
+
+// Sortiere alle Itemlisten pro Kategorie alphabetisch nach Namen (de-DE, Groß/Kleinschreibung ignoriert)
+try {
+  for (const rarityKey of Object.keys(itemPools)) {
+    const arr = itemPools[rarityKey] || [];
+    arr.sort((a, b) => (a?.name || '').localeCompare(b?.name || '', 'de', { sensitivity: 'base' }));
+  }
+} catch (e) {
+  console.warn('Alphabetische Sortierung der Item-Pools fehlgeschlagen:', e);
+}
 
 // Box-Typen mit Qualität (Wahrscheinlichkeiten in Prozent)
 const boxConfigs = {
@@ -122,83 +439,157 @@ const boxConfigs = {
     columns: 2,
     rows: 2,
     weights: {
-      Common: 85,
-      Rare: 12,
-      Epic: 2.5,
-      Legendary: 0.49,
-      Mythisch: 0.01
+      Common: 92.5,
+      Rare: 7,
+      Epic: 0.5,
+      Legendary: 0,
+      Mythisch: 0
     }
   },
   "Box#2": {
-    cost: 1000,
+    cost: 500,
     columns: 3,
     rows: 2,
     weights: {
-      Common: 60,
-      Rare: 28,
-      Epic: 10,
-      Legendary: 1.99,
-      Mythisch: 0.01
+      Common: 75,
+      Rare: 22,
+      Epic: 2.95,
+      Legendary: 0.05,
+      Mythisch: 0
+    }
+  },
+  "Testbox": {
+    // Dev-Box: zieht genau 1 Item pro Rarität + eine Reihe mit allen Schlüsseln
+    cost: 0,
+    columns: 5,
+    rows: 2,
+    weights: {
+      Common: 20,
+      Rare: 20,
+      Epic: 20,
+      Legendary: 20,
+      Mythisch: 20
     }
   },
   "Box#3": {
-    cost: 10000,
+    cost: 1000,
     columns: 4,
     rows: 2,
     weights: {
-      Common: 30,
+      Common: 60,
       Rare: 35,
-      Epic: 30,
-      Legendary: 4.98,
-      Mythisch: 0.02
+      Epic: 4.835,
+      Legendary: 0.075,
+      Mythisch: 0.015
     }
   },
   "Box#4": {
-    cost: 100000,
+    cost: 15000,
     columns: 4,
     rows: 3,
     weights: {
-      Common: 5,
-      Rare: 25,
-      Epic: 55,
-      Legendary: 14.75,
-      Mythisch: 0.25
+      Common: 50,
+      Rare: 35,
+      Epic: 14.4375,
+      Legendary: 0.2625,
+      Mythisch: 0.0375
     }
   },
   "Box#5": {
-    cost: 250000,
+    cost: 50000,
     columns: 5,
     rows: 3,
     weights: {
       Common: 0,
-      Rare: 10,
-      Epic: 50,
-      Legendary: 39,
-      Mythisch: 1
+      Rare: 20,
+      Epic: 79.2125,
+      Legendary: 0.675,
+      Mythisch: 0.1125
     }
   },
   "Box#6": {
-    cost: 500000,
+    cost: 100000,
     columns: 6,
     rows: 3,
     weights: {
       Common: 0,
-      Rare: 0,
-      Epic: 40,
-      Legendary: 58,
-      Mythisch: 2
+      Rare: 15,
+      Epic: 82.5,
+      Legendary: 2.2,
+      Mythisch: 0.3
     }
   },
   "Box#7": {
-    cost: 1000000,
+    cost: 250000,
     columns: 6,
     rows: 4,
     weights: {
       Common: 0,
-      Rare: 0,
-      Epic: 25,
-      Legendary: 70,
-      Mythisch: 5
+      Rare: 10,
+      Epic: 84.25,
+      Legendary: 5,
+      Mythisch: 0.75
+    }
+  },
+  // Schlüssel-Räume: spezielle Räume, die nur über Schlüssel zugänglich sind
+  "KeyRoom_Common": {
+    cost: 0,
+    columns: 3,
+    rows: 2,
+    weights: {
+      Common: 85,
+      Rare: 14,
+      Epic: 1,
+      Legendary: 0,
+      Mythisch: 0
+    }
+  },
+  "KeyRoom_Rare": {
+    cost: 0,
+    columns: 3,
+    rows: 2,
+    weights: {
+      Common: 50,
+      Rare: 40,
+      Epic: 9.5,
+      Legendary: 0.5,
+      Mythisch: 0
+    }
+  },
+  "KeyRoom_Epic": {
+    cost: 0,
+    columns: 4,
+    rows: 2,
+    weights: {
+      Common: 30,
+      Rare: 40,
+      Epic: 28,
+      Legendary: 1.9,
+      Mythisch: 0.1
+    }
+  },
+  "KeyRoom_Legendary": {
+    cost: 0,
+    columns: 4,
+    rows: 3,
+    weights: {
+      Common: 10,
+      Rare: 30,
+      Epic: 45,
+      Legendary: 14,
+      Mythisch: 1
+    }
+  },
+  "KeyRoom_Mythisch": {
+    cost: 0,
+    columns: 5,
+    rows: 3,
+    weights: {
+      Common: 0,
+      Rare: 20,
+      Epic: 40,
+      Legendary: 30,
+      Mythisch: 10
     }
   }
 };
@@ -208,13 +599,13 @@ const SLOT_SIZE_PX = 100;
 
 // Aktueller gewählter Box-Typ und Kontostand
 let boxType = "Box#1";
-let balance = 5000000;
+let balance = 500;
 // Öffnungszustand, um Layout-Jumps beim Box-Wechsel während des Öffnens zu vermeiden
 let isOpening = false;
 let pendingBoxType = null; // gewünschter Box-Wechsel, der nach Öffnung angewendet wird
 
 // Box-Reihenfolge für Progression
-const boxOrder = ["Box#1", "Box#2", "Box#3", "Box#4", "Box#5", "Box#6", "Box#7"];
+const boxOrder = ["Box#1", "Box#2", "Box#3", "Box#4", "Box#5", "Box#6", "Box#7", "Testbox"];
 
 // Anzeigenamen für die Boxen
 const boxDisplayNames = {
@@ -224,7 +615,13 @@ const boxDisplayNames = {
   "Box#4": "Holzkiste",
   "Box#5": "Militärkoffer",
   "Box#6": "Safe",
-  "Box#7": "Tresor"
+  "Box#7": "Tresor",
+  "Testbox": "Testbox",
+  "KeyRoom_Common": "Gewöhnlicher Raum",
+  "KeyRoom_Rare": "Seltener Raum",
+  "KeyRoom_Epic": "Epischer Raum",
+  "KeyRoom_Legendary": "Legendärer Raum",
+  "KeyRoom_Mythisch": "Mythischer Raum"
 };
 
 // Icons für die Boxen
@@ -236,7 +633,13 @@ function getBoxIcon(boxName) {
     "Box#4": "📦",
     "Box#5": "🎖️",
     "Box#6": "🔒",
-    "Box#7": "🏦"
+    "Box#7": "🏦",
+    "Testbox": "🧪",
+    "KeyRoom_Common": "🚪",
+    "KeyRoom_Rare": "🚪",
+    "KeyRoom_Epic": "🚪",
+    "KeyRoom_Legendary": "🚪",
+    "KeyRoom_Mythisch": "🚪"
   };
   return icons[boxName] || "📦";
 }
@@ -266,56 +669,173 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 // Liefert ein zufälliges Element aus einem Array
 const sample = arr => arr[Math.floor(Math.random() * arr.length)];
 
-// ======= Skill-System Hilfsfunktionen =======
-// Berechnet den Wert-Multiplikator basierend auf Wohlstand-Skills
-function getValueMultiplier() {
-  return 1 + (skills.wohlstand * 0.05); // +5% pro Punkt
+// Gewichtetes Sampling innerhalb eines Rarität-Pools über item.dropWeight (Default 1)
+function weightedSampleByDropWeight(pool) {
+  if (!Array.isArray(pool) || pool.length === 0) return null;
+  let total = 0;
+  const weights = pool.map(it => {
+    const w = (typeof it.dropWeight === 'number' && it.dropWeight >= 0) ? it.dropWeight : 1;
+    total += w;
+    return w;
+  });
+  if (total <= 0) {
+    return sample(pool);
+  }
+  let r = Math.random() * total;
+  for (let i = 0; i < pool.length; i++) {
+    const w = weights[i];
+    if (r < w) return pool[i];
+    r -= w;
+  }
+  return pool[pool.length - 1];
 }
 
-// Modifiziert die Drop-Gewichte basierend auf Glück-Skills
-function applyLuckBonus(weights) {
-  if (skills.glueck === 0) return weights;
+// ======= Skill-System Hilfsfunktionen =======
+// Berechnet den Wert-Multiplikator basierend auf Wohlstand-Skills + permanenten Shop-Upgrades
+function getValueMultiplier() {
+  const skillBonus = 1 + (skills.wohlstand * 0.03); // +3% pro Skill-Punkt
+  const permVBCount = Math.min(1, (permanentUpgrades.permValueBoost || 0));
+  const shopPermBonus = 1 + (permVBCount * 0.1); // max einmal +10%
+  const shopStatWealth = 1 + ((statUpgradesLevels.wealth || 0) * 0.02); // +2% pro Stufe (Shop-Stat)
+  const tempBonus = (activeBoosts.valueBoostUses > 0) ? (1 + activeBoosts.valueBoost) : 1; // temporärer Boost
+  return skillBonus * shopPermBonus * shopStatWealth * tempBonus;
+}
+
+// Modifiziert die Drop-Gewichte basierend auf Glück-Skills + temporären Shop-Boosts
+function applyLuckBonus(weights, boxType) {
+  // Ziel: Mythisch-Chance bleibt je Box aufsteigend (Box1 < ... < Box7), auch mit Glück.
+  // Ansatz: Proportionale Verschiebung – ein prozentualer Anteil jeder Rarität fließt in die nächst-seltenere.
+  // Dadurch wächst der Zuwachs bei Mythisch mit dem vorhandenen Legendary-Anteil der jeweiligen Box und bewahrt die Rangfolge.
+  let g = (skills.glueck || 0) + (statUpgradesLevels.luck || 0);
   
-  // Glück verschiebt Gewichte nach oben (seltenere Items werden wahrscheinlicher)
+  // Temporärer Rarity-Boost aus Shop
+  if (activeBoosts.rarityBoostUses > 0) {
+    g = g * (1 + activeBoosts.rarityBoost); // z.B. 1.5x Multiplikator
+  }
+  
+  if (g === 0) return weights;
+
   const modifiedWeights = { ...weights };
-  const luckBonus = skills.glueck * 0.5; // 0.5% shift pro Punkt
+
+  // Pro-Punkt-Raten (halbiert): konservativ gekappt
+  const crRate = Math.min(0.01 * g, 0.10);    // bis zu 10% von Common -> Rare
+  const reRate = Math.min(0.0075 * g, 0.075); // bis zu 7,5% von Rare  -> Epic
+  const elRate = Math.min(0.005 * g, 0.05);   // bis zu 5% von Epic    -> Legendary
   
-  // Verschiebe Gewicht von Common zu Rare, von Rare zu Epic, etc.
-  if (modifiedWeights.Common > 0) {
-    const shift = Math.min(modifiedWeights.Common, luckBonus * 2);
-    modifiedWeights.Common -= shift;
-    modifiedWeights.Rare = (modifiedWeights.Rare || 0) + shift;
-  }
-  if (modifiedWeights.Rare > 0) {
-    const shift = Math.min(modifiedWeights.Rare, luckBonus * 1.5);
-    modifiedWeights.Rare -= shift;
-    modifiedWeights.Epic = (modifiedWeights.Epic || 0) + shift;
-  }
-  if (modifiedWeights.Epic > 0) {
-    const shift = Math.min(modifiedWeights.Epic, luckBonus);
-    modifiedWeights.Epic -= shift;
-    modifiedWeights.Legendary = (modifiedWeights.Legendary || 0) + shift;
-  }
-  if (modifiedWeights.Legendary > 0) {
-    const shift = Math.min(modifiedWeights.Legendary, luckBonus * 0.5);
-    modifiedWeights.Legendary -= shift;
-    modifiedWeights.Mythisch = (modifiedWeights.Mythisch || 0) + shift;
-  }
+  // Legendary -> Mythisch: Box-spezifische Logik
+  let lmRate = 0;
   
+  if (boxType === 'Box#1') {
+    // Box 1: KEINE Mythisch-Verschiebung erlaubt
+    lmRate = 0;
+  } else if (boxType === 'Box#2') {
+    // Box 2: weiter leicht reduziert – Ziel: sehr geringe Mythisch-Zuwächse trotz Glück
+    // Vorher: min(0.000125*g, 0.00125) → Jetzt ~20% geringer
+    lmRate = Math.min(0.0001 * g, 0.001);
+  } else {
+    // Box 3-7: insgesamt ~20% weniger als zuvor
+    // Vorher: min(0.0025*g, 0.03) * 0.5  (max ~1,5% von Leg. → Mythisch)
+    // Jetzt:  min(0.0025*g, 0.03) * 0.4  (max ~1,2% von Leg. → Mythisch)
+    lmRate = Math.min(0.0025 * g, 0.03) * 0.4;
+  }
+
+  // Common -> Rare
+  if (modifiedWeights.Common && modifiedWeights.Common > 0) {
+    const shiftCR = modifiedWeights.Common * crRate;
+    modifiedWeights.Common -= shiftCR;
+    modifiedWeights.Rare = (modifiedWeights.Rare || 0) + shiftCR;
+  }
+
+  // Rare -> Epic
+  if (modifiedWeights.Rare && modifiedWeights.Rare > 0) {
+    const shiftRE = modifiedWeights.Rare * reRate;
+    modifiedWeights.Rare -= shiftRE;
+    modifiedWeights.Epic = (modifiedWeights.Epic || 0) + shiftRE;
+  }
+
+  // Epic -> Legendary
+  if (modifiedWeights.Epic && modifiedWeights.Epic > 0) {
+    const shiftEL = modifiedWeights.Epic * elRate;
+    modifiedWeights.Epic -= shiftEL;
+    modifiedWeights.Legendary = (modifiedWeights.Legendary || 0) + shiftEL;
+  }
+
+  // Legendary -> Mythisch (nur wenn lmRate > 0)
+  if (lmRate > 0 && modifiedWeights.Legendary && modifiedWeights.Legendary > 0) {
+    const shiftLM = modifiedWeights.Legendary * lmRate;
+    modifiedWeights.Legendary -= shiftLM;
+    modifiedWeights.Mythisch = (modifiedWeights.Mythisch || 0) + shiftLM;
+  }
+
   return modifiedWeights;
 }
 
 // Berechnet Tempo-Multiplikator für Animationen (reduziert Zeit)
 function getTempoMultiplier() {
-  return 1 - (skills.effizienz * 0.05); // -5% Zeit pro Punkt (max -50% bei 10 Punkten)
+  // -3,5% Zeit pro Skill-Punkt, -2% pro Shop-Tempo-Stufe, -10% pro permanentem Handschuh
+  const skillReduce = (skills.effizienz || 0) * 0.035;
+  const shopReduce = (statUpgradesLevels.tempo || 0) * 0.02;
+  const permTempoCount = Math.min(1, (permanentUpgrades.permTempoBoost || 0));
+  const permReduce = permTempoCount * 0.10; // max einmal -10%
+  const raw = 1 - (skillReduce + shopReduce + permReduce);
+  // Kappe damit es nicht zu 0 fällt
+  return Math.max(0.3, Math.min(1, raw));
 }
 
-// 🎯 Item aus Pool basierend auf Rarität
+// Berechnet die Anzahl der Items basierend auf Slot-Füllrate (20-100%, Peak bei 50%) + permanente Shop-Upgrades
+function getWeightedItemCount(boxType) {
+  const columns = boxConfigs[boxType].columns || 4;
+  const rows = boxConfigs[boxType].rows || 3;
+  const totalSlots = columns * rows;
+  
+  // Bestimme Füllrate-Ziel basierend auf Box-Typ
+  // Reduziert: Box 1-3: 60% Durchschnitt, Box 4-5: 50%, Box 6-7: 60%
+  const boxNumber = parseInt(boxType.replace('Box#', ''));
+  const targetFillRate = (boxNumber <= 3 || boxNumber >= 6) ? 0.6 : 0.5;
+  
+  // Normalverteilung um den Zielwert herum, begrenzt auf 20-100%
+  // Verwende Box-Muller-Transformation für Normalverteilung
+  const u1 = Math.random();
+  const u2 = Math.random();
+  const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+  
+  // z0 ist normalverteilt mit mean=0, stddev=1
+  // Skaliere auf mean=targetFillRate, stddev=12% (geringere Streuung)
+  let fillRate = targetFillRate + (z0 * 0.12);
+  
+  // Begrenze auf 20-100%
+  fillRate = Math.max(0.2, Math.min(1.0, fillRate));
+  
+  // Berechne Anzahl Items
+  let itemCount = Math.max(1, Math.floor(totalSlots * fillRate));
+  
+  // Maximal alle Slots füllen
+  itemCount = Math.min(itemCount, totalSlots);
+  
+  return itemCount;
+}
 // Wählt ein Item basierend auf den Gewichten der Raritäten aus.
 // Diese Funktion skaliert korrekt, auch wenn die Gewichte nicht genau 100 ergeben.
 function getRandomItem(boxType) {
   const baseWeights = boxConfigs[boxType].weights;
-  const weights = applyLuckBonus(baseWeights); // Glück-Skill anwenden
+  const weights = applyLuckBonus(baseWeights, boxType); // Glück-Skill anwenden (mit boxType)
+
+  // Box 1: komplett keine Mythischen Items
+  if (boxType === 'Box#1') {
+    if (weights.Mythisch && weights.Mythisch > 0) {
+      weights.Legendary = (weights.Legendary || 0) + weights.Mythisch;
+      weights.Mythisch = 0;
+    }
+  }
+  
+  // Box 2: maximal 0,05% Mythisch bei 20 Glück
+  if (boxType === 'Box#2') {
+    if (weights.Mythisch && weights.Mythisch > 0.05) {
+      const excess = weights.Mythisch - 0.05;
+      weights.Legendary = (weights.Legendary || 0) + excess;
+      weights.Mythisch = 0.05;
+    }
+  }
   const totalWeight = rarities.reduce((sum, r) => sum + (weights[r] || 0), 0);
   if (totalWeight <= 0) {
     // Fallback, falls fehlerhafte Konfiguration
@@ -328,7 +848,7 @@ function getRandomItem(boxType) {
     const w = weights[rarity] || 0;
     if (rand < w) {
       const pool = itemPools[rarity] || itemPools.Common;
-      const item = sample(pool);
+      const item = weightedSampleByDropWeight(pool);
       // Item-Wert mit Wohlstand-Multiplikator anwenden
       const modifiedItem = { 
         ...item, 
@@ -354,9 +874,9 @@ function getWeightedItemCount(boxType) {
   const totalSlots = columns * rows;
   
   // Bestimme Füllrate-Ziel basierend auf Box-Typ
-  // Box 1-3: 70% Durchschnitt, Box 4-5: 60%, Box 6-7: 70%
+  // Reduziert: Box 1-3: 60% Durchschnitt, Box 4-5: 50%, Box 6-7: 60%
   const boxNumber = parseInt(boxType.replace('Box#', ''));
-  const targetFillRate = (boxNumber <= 3 || boxNumber >= 6) ? 0.7 : 0.6;
+  const targetFillRate = (boxNumber <= 3 || boxNumber >= 6) ? 0.6 : 0.5;
   
   // Normalverteilung um den Zielwert herum, begrenzt auf 20-100%
   // Verwende Box-Muller-Transformation für Normalverteilung
@@ -365,8 +885,8 @@ function getWeightedItemCount(boxType) {
   const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
   
   // z0 ist normalverteilt mit mean=0, stddev=1
-  // Skaliere auf mean=targetFillRate, stddev=15%
-  let fillRate = targetFillRate + (z0 * 0.15);
+  // Skaliere auf mean=targetFillRate, stddev=12% (geringere Streuung)
+  let fillRate = targetFillRate + (z0 * 0.12);
   
   // Begrenze auf 20-100%
   fillRate = Math.max(0.2, Math.min(1.0, fillRate));
@@ -383,29 +903,33 @@ function selectBox(type) {
   // und verschiebe den tatsächlichen Box-Wechsel bis nach der Animation.
   if (isOpening) {
     // Visuelle Auswahl aktualisieren
-    for (let i = 1; i <= 7; i++) {
-      const btn = document.getElementById(`boxBtn${i}`);
+    for (let i = 0; i < boxOrder.length; i++) {
+      const btn = document.getElementById(`boxBtn${i + 1}`);
       if (btn) btn.classList.remove('selected');
     }
-    const boxNumberTemp = type.replace('Box#', '');
-    const selectedBtnTemp = document.getElementById(`boxBtn${boxNumberTemp}`);
+    const idxTemp = boxOrder.indexOf(type);
+    const selectedBtnTemp = document.getElementById(`boxBtn${idxTemp + 1}`);
     if (selectedBtnTemp) selectedBtnTemp.classList.add('selected');
     // Merke gewünschte Box und beende hier
     pendingBoxType = type;
+    // Kisten-Theme sofort visuell anpassen
+    updateChestTheme(type);
     return;
   }
 
   boxType = type;
+  // Kisten-Theme anpassen
+  updateChestTheme(type);
   
   // Entferne "selected" Klasse von allen Buttons
-  for (let i = 1; i <= 7; i++) {
-    const btn = document.getElementById(`boxBtn${i}`);
+  for (let i = 0; i < boxOrder.length; i++) {
+    const btn = document.getElementById(`boxBtn${i + 1}`);
     if (btn) btn.classList.remove('selected');
   }
   
   // Füge "selected" Klasse zum gewählten Button hinzu
-  const boxNumber = type.replace('Box#', '');
-  const selectedBtn = document.getElementById(`boxBtn${boxNumber}`);
+  const idx = boxOrder.indexOf(type);
+  const selectedBtn = document.getElementById(`boxBtn${idx + 1}`);
   if (selectedBtn) selectedBtn.classList.add('selected');
   
   // Grid neu erstellen mit den Dimensionen der neuen Box
@@ -415,22 +939,29 @@ function selectBox(type) {
   if (dom.boxInfoModal && dom.boxInfoModal.style.display === 'block') {
     populateBoxInfo();
   }
+  // Öffnen-Button-Icon aktualisieren (Box-Emoji oder Schlüssel)
+  updateOpenBtnIcon();
 }
 
 // Exponiere selectBox global (vorerst kompatibel)
 window.selectBox = selectBox;
 
 // Wire box button clicks via JS (statt inline onclick)
-for (let i = 1; i <= 7; i++) {
-  const btn = document.getElementById(`boxBtn${i}`);
+for (let i = 0; i < boxOrder.length; i++) {
+  const btn = document.getElementById(`boxBtn${i + 1}`);
   if (btn) {
-    btn.addEventListener('click', () => selectBox(`Box#${i}`));
+    btn.addEventListener('click', () => selectBox(boxOrder[i]));
   }
 }
 
 // Versucht, die Kosten für die aktuelle Box vom Guthaben abzuziehen.
 // Gibt true zurück, wenn erfolgreich, ansonsten false.
 function deductBalanceForBox() {
+  // Einmaliger kostenloser Öffnungsvorgang (durch Schlüssel) erlaubt das Überspringen der Kosten
+  if (__nextOpenIsFree) {
+    __nextOpenIsFree = false;
+    return true;
+  }
   const cost = boxConfigs[boxType].cost || 0;
   if (balance < cost) {
     alert('Nicht genug 💰 für diese Box!');
@@ -456,6 +987,7 @@ const dom = {
   statsOverlay: document.getElementById('statsOverlay'),
   statsContent: document.getElementById('statsContent'),
   closeStatsBtn: document.getElementById('closeStatsBtn'),
+  resetBtn: document.getElementById('resetBtn'),
   // Level & Skills UI
   playerLevel: document.getElementById('playerLevel'),
   playerTitle: document.getElementById('playerTitle'),
@@ -471,13 +1003,501 @@ const dom = {
   effizienzLevel: document.getElementById('effizienzLevel'),
   upgradeWohlstand: document.getElementById('upgradeWohlstand'),
   upgradeGlueck: document.getElementById('upgradeGlueck'),
-  upgradeEffizienz: document.getElementById('upgradeEffizienz')
+  upgradeEffizienz: document.getElementById('upgradeEffizienz'),
+  // Shop UI
+  shopBtn: document.getElementById('shopBtn'),
+  shopModal: document.getElementById('shopModal'),
+  closeShopBtn: document.getElementById('closeShopBtn'),
+  shopBalance: document.getElementById('shopBalance'),
+  shopContent: document.getElementById('shopContent')
 };
+
+// ======= Quickslots (Trankgürtel) =======
+function ensureQuickslotsContainer() {
+  const parent = document.getElementById('actionButtons');
+  if (!parent) return null;
+  let qs = document.getElementById('quickslots');
+  if (!qs) {
+    qs = document.createElement('div');
+    qs.id = 'quickslots';
+    qs.className = 'quickslots';
+    // Standardposition: links vom Shop-Button
+    if (dom.shopBtn && dom.shopBtn.parentElement === parent) {
+      parent.insertBefore(qs, dom.shopBtn);
+    } else {
+      parent.prepend(qs);
+    }
+  }
+  return qs;
+}
+
+function quickBuyPotion(itemId) {
+  // Safety: nur bekannte Tränke erlauben
+  if (!shopItems[itemId] || shopItems[itemId].type !== 'temp') return;
+  purchaseShopItem(itemId);
+}
+
+// Neues, sauberes Trank-Icon als Inline-SVG (skalierbar, ohne Emoji)
+let __potionSvgId = 0;
+function renderPotionIconHTML(iconChar) {
+  // Farbauswahl nach "Art" des Tranks (abgeleitet von bisherigem Emoji)
+  const key = String(iconChar || '').trim();
+  /**
+   * Farbvariante:
+   *  - 🍀 (Wert): gold/gelb
+   *  - 🌿 (Rarity): violett
+   *  - 📚 (XP): blau/türkis
+   *  - default: türkis
+   */
+  let c1 = '#2dd4bf', c2 = '#0ea5a4'; // default teal gradient
+  if (key === '🍀') { c1 = '#f1c40f'; c2 = '#e67e22'; }
+  else if (key === '🌿') { c1 = '#b372e8'; c2 = '#8e44ad'; }
+  else if (key === '📚') { c1 = '#5fb3ff'; c2 = '#1f7dd6'; }
+
+  const id = ++__potionSvgId;
+  // SVG: runder Flaschenbauch, Hals, Stopfen, Flüssigkeit mit Schaumkrone + Bläschen
+  // ViewBox 0 0 64 64; wird per CSS in .potion-icon skaliert
+  return `
+    <span class="potion-icon" role="img" aria-label="Trank">
+      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true">
+        <defs>
+          <linearGradient id="pot-grad-${id}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="${c1}"/>
+            <stop offset="100%" stop-color="${c2}"/>
+          </linearGradient>
+          <filter id="pot-shadow-${id}" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="#000" flood-opacity="0.35"/>
+          </filter>
+          <filter id="pot-imp-${id}" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="0.5" stdDeviation="0.6" flood-color="#000" flood-opacity="0.55"/>
+          </filter>
+        </defs>
+        <!-- Flasche -->
+        <g filter="url(#pot-shadow-${id})" stroke="#e6f3ff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+          <!-- Bauch -->
+          <path d="M18,28 C14,28 10,36 10,42 C10,52 18,58 32,58 C46,58 54,52 54,42 C54,36 50,28 46,28 Z" fill="#1b2636"/>
+          <!-- Hals -->
+          <path d="M27,10 L37,10 C38.5,10 40,11.5 40,13 L40,22 C40,24 42,26 46,28 L18,28 C22,26 24,24 24,22 L24,13 C24,11.5 25.5,10 27,10 Z" fill="#1b2636"/>
+          <!-- Stopfen -->
+          <rect x="26" y="6" width="12" height="6" rx="2" ry="2" fill="#a07855" stroke="#e6f3ff"/>
+        </g>
+        <!-- Flüssigkeit (mit Schaumkante) -->
+        <g>
+          <!-- Füllhöhe -->
+          <path d="M14,42 C14,48 20,54 32,54 C44,54 50,48 50,42 C50,40 49,38 47,36 L17,36 C15,38 14,40 14,42 Z" fill="url(#pot-grad-${id})"/>
+          <!-- Schaum-/Glanzkante -->
+          <path d="M16,36 C20,34 28,33 32,33 C36,33 44,34 48,36" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2" stroke-linecap="round"/>
+          <!-- Bläschen -->
+          <circle cx="28" cy="43" r="2" fill="rgba(255,255,255,0.9)"/>
+          <circle cx="36" cy="46" r="1.6" fill="rgba(255,255,255,0.85)"/>
+          <circle cx="40" cy="41" r="1.2" fill="rgba(255,255,255,0.8)"/>
+        </g>
+        <!-- Aufdruck (altes Icon) zentriert auf dem Flaschenbauch -->
+        ${key ? `<text x="32" y="44" text-anchor="middle" dominant-baseline="middle" font-size="14" filter="url(#pot-imp-${id})" style="pointer-events:none;">${key.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</text>` : ''}
+        <!-- Glanz auf Flasche -->
+        <path d="M22,30 C22,30 26,24 30,22" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+    </span>`;
+}
+
+function renderQuickslots() {
+  try {
+    const owned = (permanentUpgrades.permPotionBelt || 0) >= 1;
+    let qs = document.getElementById('quickslots');
+    if (!owned) {
+      if (qs && qs.parentElement) qs.parentElement.removeChild(qs);
+      return;
+    }
+    qs = ensureQuickslotsContainer();
+    if (!qs) return;
+    // Inhalte neu rendern
+    qs.innerHTML = '';
+    const mapping = [
+      { id: 'tempValueBoost', usesKey: 'valueBoostUses' },
+      { id: 'tempRarityBoost', usesKey: 'rarityBoostUses' },
+      { id: 'tempXPBoost', usesKey: 'xpBoostUses' }
+    ];
+    for (const m of mapping) {
+      const item = shopItems[m.id];
+      if (!item) continue;
+      const btn = document.createElement('button');
+      btn.className = 'quickslot-btn';
+  const beltNote = (permanentUpgrades.permPotionBelt || 0) >= 1 ? `\n+1 Aufladung pro Kauf` : '';
+      btn.title = `${item.icon} ${item.name}\n${item.description}\nPreis: ${formatNumber(item.cost)} 💰${beltNote}`;
+      btn.innerHTML = renderPotionIconHTML(item.icon);
+      const canAfford = balance >= item.cost;
+      btn.disabled = !canAfford;
+      btn.addEventListener('click', () => quickBuyPotion(m.id));
+      // Uses-Badge
+      const uses = activeBoosts[m.usesKey] || 0;
+      if (uses > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'quickslot-badge';
+        badge.textContent = String(uses);
+        btn.appendChild(badge);
+      }
+      qs.appendChild(btn);
+    }
+  } catch (e) {
+    console.warn('renderQuickslots failed', e);
+  }
+}
+
+// Suche-Animation (Männchen + Kiste)
+const searchAnimEl = document.getElementById('searchAnim');
+let __rummageInterval = null;
+
+function createRummageParticle() {
+  if (!searchAnimEl) return;
+  const rootRect = searchAnimEl.getBoundingClientRect();
+  const chest = searchAnimEl.querySelector('.chest');
+  const chestBody = searchAnimEl.querySelector('.chest-body');
+  if (!chest || !chestBody) return;
+  const chestRect = chestBody.getBoundingClientRect();
+
+  // Ursprung: zufällig über die gesamte Kistenfläche verteilt
+  const originX = chestRect.left - rootRect.left + Math.random() * chestRect.width;
+  const originY = chestRect.top - rootRect.top + Math.random() * chestRect.height;
+
+  const p = document.createElement('div');
+  p.className = 'rummage-particle';
+
+  // Varianten: meistens Staub-Punkte, gelegentlich Feder oder Zahnrad
+  const rand = Math.random();
+  if (rand < 0.7) {
+    p.classList.add('dot'); // 70% schwarze Punkte
+  } else if (rand < 0.85) {
+    p.classList.add('feather'); // 15% Feder
+  } else {
+    p.classList.add('gear'); // 15% Zahnrad
+  }
+
+  // Zufällige Richtung: nur nach oben und zur Seite (90° bis 270°, mit Schwerpunkt oben)
+  // Verhindere, dass Partikel nach unten fliegen
+  const angle = (Math.PI * 0.5) + (Math.random() * Math.PI); // 90° bis 270° (nach oben)
+  const distance = 40 + Math.random() * 50; // 40-90px Flugweite
+  const dx = Math.cos(angle) * distance;
+  const dy = Math.sin(angle) * distance; // wird negativ sein (nach oben)
+  const rot = (Math.random() * 100 - 50); // -50..50 deg
+  
+  p.style.setProperty('--dx', dx.toFixed(1) + 'px');
+  p.style.setProperty('--dy', dy.toFixed(1) + 'px');
+  p.style.setProperty('--rot', rot.toFixed(1) + 'deg');
+
+  // Position relativ zu #searchAnim
+  p.style.left = originX + 'px';
+  p.style.top = originY + 'px';
+
+  // Lebensdauer: nach Animationsende entfernen
+  p.addEventListener('animationend', () => {
+    if (p.parentElement) p.parentElement.removeChild(p);
+  });
+
+  searchAnimEl.appendChild(p);
+}
+
+function startRummageParticles() {
+  // Sicherstellen, dass kein zweites Intervall läuft
+  stopRummageParticles();
+  __rummageInterval = setInterval(() => {
+    // Pro Tick nur 1 Partikel (statt 2-3)
+    createRummageParticle();
+  }, 250); // längeres Intervall für weniger Partikel
+}
+
+function stopRummageParticles() {
+  if (__rummageInterval) {
+    clearInterval(__rummageInterval);
+    __rummageInterval = null;
+  }
+}
+
+function setSearchingState(active) {
+  try {
+    if (!searchAnimEl) return;
+    searchAnimEl.classList.toggle('searching', !!active);
+    const char = searchAnimEl.querySelector('.character');
+    if (char) {
+      if (active) {
+        char.classList.remove('idle');
+        startRummageParticles();
+      } else {
+        // Sofort zurück in Idle ohne Verzögerung und Partikel stoppen
+        stopRummageParticles();
+        char.classList.add('idle');
+        // Restpartikel verschwinden automatisch nach animationend
+      }
+    }
+  } catch (_) { /* ignore */ }
+}
+
+// Passt die Optik der Kiste an die gewählte Box an (über Theme-Klasse auf #searchAnim)
+function updateChestTheme(forBoxType) {
+  if (!searchAnimEl) return;
+  const root = searchAnimEl;
+  // entferne alte theme- Klassen
+  for (const c of Array.from(root.classList)) {
+    if (c.startsWith('theme-')) root.classList.remove(c);
+  }
+  const token = String(forBoxType || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-');
+  if (token) root.classList.add(`theme-${token}`);
+
+  // Emoji-Icon entsprechend der aktuellen Box setzen
+  try {
+    const chest = root.querySelector('.chest');
+    if (chest) {
+      let emojiEl = chest.querySelector('.chest-emoji');
+      if (!emojiEl) {
+        emojiEl = document.createElement('div');
+        emojiEl.className = 'chest-emoji';
+        emojiEl.setAttribute('aria-hidden', 'true');
+        chest.appendChild(emojiEl);
+      }
+      const icon = (typeof getBoxIcon === 'function') ? (getBoxIcon(forBoxType) || '📦') : '📦';
+      emojiEl.textContent = icon;
+    }
+  } catch (_) { /* ignore */ }
+}
+
+// DEV toggle elements (not part of dom object to avoid breaking assumptions elsewhere)
+const devMoneyBtn = document.getElementById('devMoneyBtn');
+const devToggleCheckbox = document.getElementById('toggleDev');
+const DEV_MODE_KEY = 'lootsim_devMode_v1';
+let devMode = false;
+
+function loadDevMode() {
+  try {
+    const raw = localStorage.getItem(DEV_MODE_KEY);
+    devMode = raw === '1';
+  } catch (_) { devMode = false; }
+}
+
+function saveDevMode() {
+  try { localStorage.setItem(DEV_MODE_KEY, devMode ? '1' : '0'); } catch (_) {}
+}
+
+function setDevMode(enabled) {
+  devMode = !!enabled;
+  if (devToggleCheckbox) devToggleCheckbox.checked = devMode;
+  // Toggle dev money button
+  if (devMoneyBtn) devMoneyBtn.style.display = devMode ? '' : 'none';
+  // Toggle Testbox button explicitly
+  const idx = boxOrder.indexOf('Testbox');
+  if (idx >= 0) {
+    const btn = document.getElementById(`boxBtn${idx + 1}`);
+    if (btn) btn.style.display = devMode ? '' : 'none';
+  }
+  // Toggle green check on secret 'o'
+  try {
+    const secret = document.getElementById('secretDevSwitch');
+    if (secret) secret.classList.toggle('dev-on', devMode);
+  } catch (_) { /* ignore */ }
+  saveDevMode();
+  // Re-evaluate availability to ensure correct visibility
+  updateBoxAvailability();
+}
+
+// initialize dev mode from storage
+loadDevMode();
+if (devToggleCheckbox) {
+  devToggleCheckbox.addEventListener('change', (e) => {
+    setDevMode(!!e.target.checked);
+  });
+}
+// Apply initial state to UI
+setDevMode(devMode);
+
+// Secret title toggle (press-and-hold on the hidden 'o' for 1s)
+try {
+  const secret = document.getElementById('secretDevSwitch');
+  if (secret) {
+    let holdTimer = null;
+    const startHold = () => {
+      if (holdTimer) clearTimeout(holdTimer);
+      holdTimer = setTimeout(() => {
+        setDevMode(!devMode);
+        try { console.log(`DEV ${devMode ? 'enabled' : 'disabled'}`); } catch (_) {}
+      }, 1000); // 1s hold
+    };
+    const cancelHold = () => {
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+    };
+    // Mouse events
+    secret.addEventListener('mousedown', startHold);
+    secret.addEventListener('mouseup', cancelHold);
+    secret.addEventListener('mouseleave', cancelHold);
+    // Touch events
+    secret.addEventListener('touchstart', (e) => { startHold(); }, { passive: true });
+    secret.addEventListener('touchend', cancelHold, { passive: true });
+    secret.addEventListener('touchcancel', cancelHold, { passive: true });
+  }
+} catch (_) { /* ignore */ }
+
+// ======= Tooltip-System (Custom Hover-Popup) =======
+let __lootTooltipEl = null;
+function initLootTooltip() {
+  if (__lootTooltipEl) return;
+  const tip = document.createElement('div');
+  tip.className = 'loot-tooltip';
+  tip.style.setProperty('--tip-accent', '#888');
+  tip.style.display = 'none';
+  tip.setAttribute('role', 'tooltip');
+  document.body.appendChild(tip);
+  __lootTooltipEl = tip;
+}
+
+function setTooltipContent({ name = '', value = null, description = '', rarity = 'Common' }) {
+  if (!__lootTooltipEl) return;
+  __lootTooltipEl.style.setProperty('--tip-accent', colors[rarity] || '#888');
+  __lootTooltipEl.innerHTML = '';
+  const nameEl = document.createElement('div');
+  nameEl.className = 'tip-name';
+  nameEl.textContent = name || '';
+  const rarityEl = document.createElement('div');
+  rarityEl.className = 'tip-rarity';
+  rarityEl.textContent = displayRarityName(rarity);
+  const valueEl = document.createElement('div');
+  valueEl.className = 'tip-value';
+  valueEl.textContent = value != null ? `${Number(value || 0).toLocaleString('de-DE')} 💰` : 'Wert unbekannt';
+  const descEl = document.createElement('div');
+  descEl.className = 'tip-desc';
+  descEl.textContent = description || '';
+  __lootTooltipEl.appendChild(nameEl);
+  __lootTooltipEl.appendChild(rarityEl);
+  __lootTooltipEl.appendChild(valueEl);
+  if (description) __lootTooltipEl.appendChild(descEl);
+}
+
+function positionTooltip(x, y) {
+  if (!__lootTooltipEl) return;
+  const margin = 14;
+  const tipRect = __lootTooltipEl.getBoundingClientRect();
+  let left = x + margin;
+  let top = y + margin;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  if (left + tipRect.width > vw - 8) left = x - tipRect.width - margin;
+  if (top + tipRect.height > vh - 8) top = y - tipRect.height - margin;
+  __lootTooltipEl.style.left = `${Math.max(0, left)}px`;
+  __lootTooltipEl.style.top = `${Math.max(0, top)}px`;
+}
+
+function showTooltip(evt, data) {
+  initLootTooltip();
+  setTooltipContent(data);
+  __lootTooltipEl.style.display = 'block';
+  positionTooltip(evt.clientX, evt.clientY);
+}
+
+function moveTooltip(evt) {
+  if (!__lootTooltipEl || __lootTooltipEl.style.display === 'none') return;
+  positionTooltip(evt.clientX, evt.clientY);
+}
+
+function hideTooltip() {
+  if (!__lootTooltipEl) return;
+  __lootTooltipEl.style.display = 'none';
+}
+
+function attachTooltip(el, dataProvider) {
+  // dataProvider can be object or function returning object
+  const getData = () => (typeof dataProvider === 'function' ? dataProvider() : dataProvider);
+  el.addEventListener('mouseenter', (e) => showTooltip(e, getData()));
+  el.addEventListener('mousemove', moveTooltip);
+  el.addEventListener('mouseleave', hideTooltip);
+}
+
+// ======= Rarity Reveal Effects (Visual + Audio) =======
+let __audioCtx = null;
+function ensureAudioCtx() {
+  try {
+    if (!__audioCtx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) __audioCtx = new AudioCtx();
+    }
+  } catch (e) {
+    // ignore
+  }
+  return __audioCtx;
+}
+
+function playRaritySound(rarity) {
+  const ctx = ensureAudioCtx();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const duration = rarity === 'Mythisch' ? 0.35 : 0.22;
+  const baseFreq = rarity === 'Mythisch' ? 1046.5 : 880; // C6 vs A5
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = rarity === 'Mythisch' ? 'triangle' : 'sine';
+  osc.frequency.setValueAtTime(baseFreq, now);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.linearRampToValueAtTime(0.12, now + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + duration + 0.02);
+
+  // Optional small chime for Mythisch (a fifth above)
+  if (rarity === 'Mythisch') {
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'triangle';
+    osc2.frequency.setValueAtTime(baseFreq * 1.5, now + 0.03);
+    gain2.gain.setValueAtTime(0.0001, now + 0.03);
+    gain2.gain.linearRampToValueAtTime(0.08, now + 0.08);
+    gain2.gain.exponentialRampToValueAtTime(0.0001, now + duration + 0.08);
+    osc2.connect(gain2).connect(ctx.destination);
+    osc2.start(now + 0.03);
+    osc2.stop(now + duration + 0.12);
+  }
+}
+
+function triggerRarityEffect(targetEl, rarity) {
+  try {
+    const flare = document.createElement('div');
+    flare.className = 'rarity-flare ' + (rarity === 'Mythisch' ? 'mythic-flare' : 'legendary-flare');
+    targetEl.appendChild(flare);
+    // remove after animation
+    setTimeout(() => {
+      if (flare.parentElement) flare.parentElement.removeChild(flare);
+    }, 1400);
+  } catch (e) {
+    // ignore effect errors
+  }
+  // sound
+  playRaritySound(rarity);
+
+  // Additional screen vignette for Mythisch for extra drama
+  if (rarity === 'Mythisch') {
+    try {
+      const vignette = document.createElement('div');
+      vignette.className = 'screen-vignette';
+      document.body.appendChild(vignette);
+      setTimeout(() => {
+        if (vignette.parentElement) vignette.parentElement.removeChild(vignette);
+      }, 900);
+    } catch (_) { /* ignore */ }
+  }
+}
+
+function displayRarityName(rarity) {
+  switch (rarity) {
+    case 'Common': return 'Gewöhnlich';
+    case 'Rare': return 'Selten';
+    case 'Epic': return 'Episch';
+    case 'Legendary': return 'Legendär';
+    case 'Mythisch': return 'Mythisch';
+    default: return rarity || '—';
+  }
+}
 
 // Aktiviert/Deaktiviert temporär die Box-Auswahl-Buttons
 function setBoxSelectionEnabled(enabled) {
-  for (let i = 1; i <= 7; i++) {
-    const btn = document.getElementById(`boxBtn${i}`);
+  for (let i = 0; i < boxOrder.length; i++) {
+    const btn = document.getElementById(`boxBtn${i + 1}`);
     if (!btn) continue;
     if (!enabled) {
       btn.disabled = true; // verhindert Klicks, inkl. inline onclick
@@ -530,10 +1550,440 @@ dom.boxInfoContent = boxInfoModal.querySelector('#boxInfoContent');
 // Globaler Maus-Tracker (letzte bekannte client-Koordinaten)
 // kein globaler Maus-Tracker mehr
 
+// ======= Schlüssel-Manager UI =======
+function getKeyTargetBox(rarity) {
+  // Feste Zuordnung: Schlüssel der Rarität öffnet einen "Raum" (spezielle Box-Konfiguration)
+  const map = {
+    Common: 'KeyRoom_Common',
+    Rare: 'KeyRoom_Rare',
+    Epic: 'KeyRoom_Epic',
+    Legendary: 'KeyRoom_Legendary',
+    Mythisch: 'KeyRoom_Mythisch'
+  };
+  const target = map[rarity];
+  return boxConfigs[target] ? target : null;
+}
+
+let __keysBtn = null;
+let __keysModal = null;
+// Vormerkung: nächste Öffnung mit Schlüssel (ohne sofort zu öffnen)
+let pendingKeyOpen = null; // { rarity: 'Epic', targetBox: 'KeyRoom_Epic' }
+// Pfeil im Schlüssel-Button und Zustand für eingeklappte Vorschau (Badges)
+let __keysBtnArrow = null;
+const KEYS_BADGES_COLLAPSE_KEY = 'lootsim_keysBadgesCollapsed_v1';
+let __keysBadgesCollapsed = false;
+function loadKeysBadgesCollapsed() {
+  try { __keysBadgesCollapsed = localStorage.getItem(KEYS_BADGES_COLLAPSE_KEY) === '1'; } catch (_) { __keysBadgesCollapsed = false; }
+}
+function saveKeysBadgesCollapsed() {
+  try { localStorage.setItem(KEYS_BADGES_COLLAPSE_KEY, __keysBadgesCollapsed ? '1' : '0'); } catch (_) {}
+}
+function setKeysBtnNotify(visible) {
+  if (!__keysBtn) return;
+  let dot = __keysBtn.querySelector('.keys-notify-dot');
+  if (visible) {
+    if (!dot) {
+      dot = document.createElement('span');
+      dot.className = 'keys-notify-dot';
+      __keysBtn.appendChild(dot);
+    }
+  } else {
+    if (dot && dot.parentElement) dot.parentElement.removeChild(dot);
+  }
+}
+function setKeysBadgesCollapsed(collapsed) {
+  __keysBadgesCollapsed = !!collapsed;
+  saveKeysBadgesCollapsed();
+  if (__keysBtnArrow) __keysBtnArrow.textContent = __keysBadgesCollapsed ? '▸' : '▾';
+  renderKeysButtonBadges();
+  // Beim Ausklappen (Badges sichtbar) Benachrichtigungspunkt entfernen
+  if (!__keysBadgesCollapsed) setKeysBtnNotify(false);
+}
+function toggleKeysBadges() { setKeysBadgesCollapsed(!__keysBadgesCollapsed); }
+
+// Hilfsfunktion: Rarität aus KeyRoom-Boxnamen ermitteln
+function getRarityForKeyRoom(name) {
+  switch (name) {
+    case 'KeyRoom_Common': return 'Common';
+    case 'KeyRoom_Rare': return 'Rare';
+    case 'KeyRoom_Epic': return 'Epic';
+    case 'KeyRoom_Legendary': return 'Legendary';
+    case 'KeyRoom_Mythisch': return 'Mythisch';
+    default: return null;
+  }
+}
+
+// Stellt sicher, dass der Öffnen-Button ein Icon-Container-Span besitzt
+function ensureOpenBtnIconSpan() {
+  const btn = dom.openBtn;
+  if (!btn) return null;
+  let span = btn.querySelector('.open-btn-icon');
+  if (!span) {
+    // Stelle sicher, dass die Beschriftung "Öffnen" gesetzt ist
+    const label = 'Öffnen';
+    const hasLabel = btn.textContent && btn.textContent.trim().startsWith('Öffnen');
+    btn.innerHTML = hasLabel ? btn.textContent.replace('🔑', '').trim().replace(/Öffnen.*/, 'Öffnen') : label;
+    // Hänge Icon-Container an
+    span = document.createElement('span');
+    span.className = 'open-btn-icon';
+    btn.appendChild(span);
+  }
+  return span;
+}
+
+// Aktualisiert das Icon hinter dem "Öffnen"-Text:
+//  - Standard: Box-Icon der aktuell gewählten Box
+//  - Schlüssel-Icon, wenn:
+//      a) pendingKeyOpen aktiv ist, ODER
+//      b) wir uns in einem KeyRoom befinden UND mindestens 1 passender Schlüssel vorhanden ist
+function updateOpenBtnIcon() {
+  const span = ensureOpenBtnIconSpan();
+  if (!span) return;
+  // Leeren
+  span.innerHTML = '';
+  // Prüfe Key-Icon-Bedingungen
+  let rarityForKeyIcon = null;
+  let rarityForDisabledKey = null;
+  if (pendingKeyOpen && pendingKeyOpen.rarity) {
+    rarityForKeyIcon = pendingKeyOpen.rarity;
+  } else {
+    const roomRarity = getRarityForKeyRoom(boxType);
+    if (roomRarity && (keysInventory[roomRarity] || 0) > 0) {
+      rarityForKeyIcon = roomRarity;
+    } else if (roomRarity) {
+      // In einem KeyRoom, aber keine Schlüssel mehr → ausgegrautes Schlüssel-Icon anzeigen
+      rarityForDisabledKey = roomRarity;
+    }
+  }
+
+  if (rarityForKeyIcon) {
+    span.classList.add('key-mode');
+    span.classList.remove('disabled');
+    span.style.backgroundColor = colors[rarityForKeyIcon] || 'rgba(0,0,0,0.6)';
+    const img = document.createElement('img');
+    img.src = 'Itembilder/Common/Schlüssel.png';
+    img.alt = '';
+    span.appendChild(img);
+  } else if (rarityForDisabledKey) {
+    span.classList.add('key-mode', 'disabled');
+    // Neutraler Hintergrund für deaktivierten Zustand
+    span.style.backgroundColor = '#555';
+    const img = document.createElement('img');
+    img.src = 'Itembilder/Common/Schlüssel.png';
+    img.alt = '';
+    span.appendChild(img);
+  } else {
+    span.classList.remove('key-mode');
+    span.classList.remove('disabled');
+    span.style.backgroundColor = '';
+    const icon = (typeof getBoxIcon === 'function') ? (getBoxIcon(boxType) || '') : '';
+    span.textContent = icon;
+  }
+}
+
+function setOpenBtnKeyIndicator(rarity) {
+  const el = dom.openBtn;
+  if (!el) return;
+  // Entferne alten Indikator
+  const old = el.querySelector('.open-key-indicator');
+  if (old) old.remove();
+  if (!rarity) return; // kein Indikator
+  const span = document.createElement('span');
+  span.className = 'open-key-indicator';
+  // Rahmenfarbe nach Rarität
+  span.style.borderColor = colors[rarity] || '#f1c40f';
+  // Hintergrundfarbe nach Rarität
+  span.style.backgroundColor = colors[rarity] || 'rgba(0,0,0,0.6)';
+  // Icon
+  const img = document.createElement('img');
+  img.src = 'Itembilder/Common/Schlüssel.png';
+  img.alt = 'Schlüssel';
+  span.appendChild(img);
+  el.appendChild(span);
+}
+
+function ensureKeysButton() {
+  const actionRow = document.getElementById('actionButtons');
+  if (!actionRow || __keysBtn) return;
+  const btn = document.createElement('button');
+  btn.id = 'keysBtn';
+  btn.className = 'box-info-btn';
+  btn.type = 'button';
+  btn.title = 'Schlüssel verwalten';
+  btn.innerHTML = '🔑';
+  // Platziere links vom Öffnen-Button, falls vorhanden
+  const open = dom.openBtn;
+  if (open && open.parentElement === actionRow) {
+    const after = open.nextSibling;
+    if (after) {
+      actionRow.insertBefore(btn, after);
+    } else {
+      actionRow.appendChild(btn);
+    }
+  } else {
+    actionRow.appendChild(btn);
+  }
+  __keysBtn = btn;
+  // Pfeil zum Auf-/Zuklappen der Schlüsselvorschau einfügen
+  __keysBtnArrow = document.createElement('span');
+  __keysBtnArrow.className = 'keys-toggle-arrow';
+  __keysBtnArrow.title = 'Schlüsselvorschau umschalten';
+  __keysBtnArrow.setAttribute('aria-label', 'Schlüsselvorschau umschalten');
+  __keysBtnArrow.textContent = __keysBadgesCollapsed ? '▸' : '▾';
+  btn.appendChild(__keysBtnArrow);
+  __keysBtnArrow.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleKeysBadges();
+  });
+
+  renderKeysButtonBadges();
+  btn.addEventListener('click', (e) => {
+    // DEV Komfort: Alt-Klick fügt je 1 Schlüssel hinzu (nur im DEV-Mode)
+    if (e.altKey && devMode) {
+      for (const r of rarities) keysInventory[r] = (keysInventory[r] || 0) + 1;
+      saveProgress();
+      // Dev-Add gilt als entdeckt
+      for (const r of rarities) discoveredKeyRarities.add(r);
+      saveKeyDiscovery();
+      renderKeysButtonBadges();
+      if (__keysBadgesCollapsed) setKeysBtnNotify(true);
+      return;
+    }
+    showKeysModal();
+    // Öffnen des Modals gilt als gesehen → Punkt entfernen
+    setKeysBtnNotify(false);
+  });
+}
+
+function renderKeysButtonBadges() {
+  if (!__keysBtn) return;
+  // Entferne alte Badges
+  const old = __keysBtn.querySelector('.key-badges');
+  if (old) old.remove();
+  const wrap = document.createElement('span');
+  wrap.className = 'key-badges';
+  const abbrev = { Common: 'C', Rare: 'R', Epic: 'E', Legendary: 'L', Mythisch: 'M' };
+  for (const r of rarities) {
+    const count = keysInventory[r] || 0;
+    const b = document.createElement('span');
+    b.className = `key-badge key-${r}`;
+    b.setAttribute('aria-label', `Schlüssel ${displayRarityName(r)}: ${count}`);
+    // Hover-Glow-Farbe je Rarität
+    try { b.style.setProperty('--kb-glow', colors[r] || 'rgba(255,255,255,0.6)'); } catch (_) {}
+
+    // Bild + Zähler
+    const iconWrap = document.createElement('span');
+    iconWrap.className = 'kb-icon-wrap';
+    iconWrap.style.borderColor = colors[r] || '#777';
+    const img = document.createElement('img');
+    img.src = 'Itembilder/Common/Schlüssel.png';
+    img.alt = '';
+    iconWrap.appendChild(img);
+    const cBadge = document.createElement('span');
+    cBadge.className = 'kb-count';
+    cBadge.textContent = String(count);
+    iconWrap.appendChild(cBadge);
+    b.appendChild(iconWrap);
+
+    // Schwarzes Icon, solange diese Schlüssel-Rarität noch nie gefunden wurde
+    const isDiscovered = discoveredKeyRarities.has(r) || (count > 0);
+    if (!isDiscovered) {
+      b.classList.add('unknown');
+    }
+
+    if (count <= 0) {
+      b.classList.add('disabled');
+      b.title = `${displayRarityName(r)} – keine Schlüssel`;
+    } else {
+      b.title = `Mit ${displayRarityName(r)}-Schlüssel vormerken`;
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (isOpening) return; // während Öffnung ignorieren
+        openWithKey(r);
+        setKeysBtnNotify(false);
+      });
+    }
+    wrap.appendChild(b);
+  }
+  if (wrap.childElementCount > 0) {
+    if (!__keysBadgesCollapsed) {
+      __keysBtn.appendChild(wrap);
+    }
+  }
+}
+
+function ensureKeysModal() {
+  if (__keysModal) return __keysModal;
+  const modal = document.createElement('div');
+  modal.id = 'keysModal';
+  modal.className = 'info-modal';
+  modal.style.display = 'none';
+  modal.innerHTML = `
+    <div class="info-content" style="max-width: 1000px;">
+      <button class="info-close" aria-label="Schließen">✖</button>
+      <h3>Schlüssel</h3>
+      <div id="keysBody"></div>
+      <div id="keysInfoArea" style="margin-top:12px;"></div>
+    </div>`;
+  document.body.appendChild(modal);
+  const closeBtn = modal.querySelector('.info-close');
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    modal.style.setProperty('display', 'none', 'important');
+  });
+  modal.addEventListener('click', (e) => {
+    const content = modal.querySelector('.info-content');
+    if (content && !content.contains(e.target)) {
+      modal.style.setProperty('display', 'none', 'important');
+    }
+  });
+  __keysModal = modal;
+  return modal;
+}
+
+function showKeysModal() {
+  const modal = ensureKeysModal();
+  const body = modal.querySelector('#keysBody');
+  const infoArea = modal.querySelector('#keysInfoArea');
+  body.innerHTML = '';
+  infoArea.innerHTML = '';
+
+  const abbrev = { Common: 'Gewöhnlich', Rare: 'Selten', Epic: 'Episch', Legendary: 'Legendär', Mythisch: 'Mythisch' };
+  for (const r of rarities) {
+    const row = document.createElement('div');
+    row.className = 'keys-row';
+
+    const count = keysInventory[r] || 0;
+    const target = getKeyTargetBox(r);
+    const targetName = target ? (boxDisplayNames[target] || target) : '—';
+
+    // Key icon with counter badge
+    const keyCell = document.createElement('div');
+    keyCell.className = 'key-cell';
+    const iconWrap = document.createElement('div');
+    iconWrap.className = 'key-icon-wrap';
+    iconWrap.style.borderColor = colors[r] || '#777';
+    const keyImg = document.createElement('img');
+    keyImg.src = 'Itembilder/Common/Schlüssel.png';
+    keyImg.alt = `Schlüssel ${abbrev[r]}`;
+    iconWrap.appendChild(keyImg);
+    const badge = document.createElement('span');
+    badge.className = 'key-counter-badge';
+    badge.textContent = String(count);
+    iconWrap.appendChild(badge);
+    const rarityLabel = document.createElement('div');
+    rarityLabel.className = 'key-rarity-label';
+    rarityLabel.style.color = colors[r] || '#fff';
+    rarityLabel.textContent = abbrev[r];
+    keyCell.appendChild(iconWrap);
+    keyCell.appendChild(rarityLabel);
+
+    // Arrow between key and door
+    const arrowCell = document.createElement('div');
+    arrowCell.className = 'arrow-cell';
+    arrowCell.textContent = '→';
+
+    // Door target
+    const doorCell = document.createElement('div');
+    doorCell.className = 'door-cell';
+    const doorEmoji = document.createElement('div');
+    doorEmoji.className = 'door-emoji';
+    doorEmoji.textContent = target ? (getBoxIcon(target) || '🚪') : '—';
+    const doorLabel = document.createElement('div');
+    doorLabel.className = 'door-label';
+    doorLabel.textContent = targetName;
+    doorCell.appendChild(doorEmoji);
+    doorCell.appendChild(doorLabel);
+
+    // Actions on the right (Info, Öffnen)
+    const actions = document.createElement('div');
+    actions.className = 'key-actions';
+    const infoBtn = document.createElement('button');
+    infoBtn.className = 'box-info-btn';
+    infoBtn.textContent = 'Info';
+    infoBtn.addEventListener('click', () => {
+      renderKeyTargetInfo(r, infoArea);
+    });
+    const useBtn = document.createElement('button');
+    useBtn.className = 'box-info-btn';
+    useBtn.textContent = 'Öffnen';
+    useBtn.disabled = count <= 0 || isOpening || !target;
+    useBtn.addEventListener('click', () => {
+      if (count <= 0 || isOpening || !target) return;
+      // Nur vormerken: Zielraum setzen und Öffnen-Button kennzeichnen
+      openWithKey(r);
+    });
+    actions.appendChild(infoBtn);
+    actions.appendChild(useBtn);
+
+    row.appendChild(keyCell);
+    row.appendChild(arrowCell);
+    row.appendChild(doorCell);
+    row.appendChild(actions);
+    body.appendChild(row);
+  }
+  modal.style.display = 'block';
+}
+
+function renderKeyTargetInfo(rarity, container) {
+  const target = getKeyTargetBox(rarity);
+  if (!target) { container.innerHTML = '<em>Keine Zielkiste konfiguriert.</em>'; return; }
+  const info = computeRarityStats(target);
+  const stats = info.rows;
+  const displayName = boxDisplayNames[target] || target;
+  const icon = getBoxIcon(target);
+  let html = `<div class="info-header"><strong>${icon} ${displayName}</strong></div>`;
+  html += '<table class="info-table"><thead><tr><th>Rarität</th><th>Dropchance</th></tr></thead><tbody>';
+  for (const s of stats) {
+    html += `<tr><td class="rarity-name" style="color:${colors[s.rarity]||'#fff'}">${s.rarity}</td><td>${s.chance.toFixed(2)} %</td></tr>`;
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function openWithKey(rarity) {
+  const target = getKeyTargetBox(rarity);
+  if (!target) return;
+  if ((keysInventory[rarity] || 0) <= 0) return;
+  // Nur vormerken, nicht sofort öffnen
+  pendingKeyOpen = { rarity, targetBox: target };
+  // UI: Box auswählen (visuell) und Öffnen-Button mit Schlüssel kennzeichnen
+  selectBox(target);
+  updateOpenBtnIcon();
+  // Modal schließen
+  if (__keysModal) __keysModal.style.setProperty('display', 'none', 'important');
+}
+
 // ======= Item-Tracker (Persistenz) =======
 const STORAGE_KEY = 'lootsim_itemCounts_v1';
+const PROGRESS_KEY = 'lootsim_progress_v1';
+const KEY_DISCOVERY_KEY = 'lootsim_keyDiscovery_v1';
+
 // Objekt: { [itemName]: count }
 let itemCounts = {};
+
+// Entdeckte Schlüssel-Raritäten (für schwarze Icons bis zum ersten Fund)
+let discoveredKeyRarities = new Set(); // Werte: 'Common' | 'Rare' | 'Epic' | 'Legendary' | 'Mythisch'
+
+function loadKeyDiscovery() {
+  try {
+    const raw = localStorage.getItem(KEY_DISCOVERY_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) discoveredKeyRarities = new Set(arr);
+    }
+  } catch (_) { /* ignore */ }
+  // Migration/Fallback: markiere Raritäten mit vorhandenem Bestand als entdeckt
+  try {
+    for (const r of rarities) {
+      if ((keysInventory[r] || 0) > 0) discoveredKeyRarities.add(r);
+    }
+  } catch (_) { /* ignore */ }
+}
+
+function saveKeyDiscovery() {
+  try { localStorage.setItem(KEY_DISCOVERY_KEY, JSON.stringify(Array.from(discoveredKeyRarities))); } catch (_) {}
+}
 
 function loadCounts() {
   try {
@@ -560,8 +2010,93 @@ function saveCounts() {
   }
 }
 
-// Load persisted counts on startup
+// Speichere und lade kompletten Fortschritt
+function saveProgress() {
+  try {
+    const progress = {
+      balance,
+      playerLevel,
+      playerXP,
+      skillPoints,
+      skills: { ...skills },
+      boxType,
+      unlockedBoxes: Array.from(unlockedBoxes),
+      stats: { ...stats },
+      activeBoosts: { ...activeBoosts },
+      permanentUpgrades: { ...permanentUpgrades },
+      purchasedItems: Array.from(purchasedItems),
+      statUpgradesLevels: { ...statUpgradesLevels },
+      keysInventory: { ...keysInventory }
+    };
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+  } catch (e) {
+    console.warn('Failed to save progress', e);
+  }
+}
+
+function loadProgress() {
+  try {
+    const raw = localStorage.getItem(PROGRESS_KEY);
+    if (!raw) return;
+    const progress = JSON.parse(raw);
+    
+    if (progress.balance !== undefined) balance = progress.balance;
+    if (progress.playerLevel !== undefined) playerLevel = progress.playerLevel;
+    if (progress.playerXP !== undefined) playerXP = progress.playerXP;
+    if (progress.skillPoints !== undefined) skillPoints = progress.skillPoints;
+    if (progress.skills) {
+      skills.wohlstand = progress.skills.wohlstand || 0;
+      skills.glueck = progress.skills.glueck || 0;
+      skills.effizienz = progress.skills.effizienz || 0;
+    }
+    if (progress.boxType) boxType = progress.boxType;
+    if (progress.unlockedBoxes) {
+      unlockedBoxes.clear();
+      progress.unlockedBoxes.forEach(box => unlockedBoxes.add(box));
+    }
+    if (progress.stats) {
+      Object.assign(stats, progress.stats);
+    }
+    if (progress.activeBoosts) {
+      Object.assign(activeBoosts, progress.activeBoosts);
+    }
+    if (progress.permanentUpgrades) {
+      Object.assign(permanentUpgrades, progress.permanentUpgrades);
+      // Migration: alte "slotIncrease" Käufe werden zu permTempoBoost konvertiert
+      if (typeof progress.permanentUpgrades.slotIncrease === 'number' && progress.permanentUpgrades.slotIncrease > 0) {
+        const add = progress.permanentUpgrades.slotIncrease;
+        permanentUpgrades.permTempoBoost = (permanentUpgrades.permTempoBoost || 0) + add;
+      }
+      // Einmalige Ausrüstung clampen (max 1 wirksam)
+      if (permanentUpgrades.permTempoBoost > 1) permanentUpgrades.permTempoBoost = 1;
+      if (permanentUpgrades.permValueBoost > 1) permanentUpgrades.permValueBoost = 1;
+      if (permanentUpgrades.permXPBoost > 1) permanentUpgrades.permXPBoost = 1;
+      if (permanentUpgrades.permPotionBelt > 1) permanentUpgrades.permPotionBelt = 1;
+    }
+    if (progress.purchasedItems) {
+      purchasedItems.clear();
+      progress.purchasedItems.forEach(item => purchasedItems.add(item));
+    }
+    if (progress.statUpgradesLevels) {
+      Object.assign(statUpgradesLevels, progress.statUpgradesLevels);
+    }
+    if (progress.keysInventory) {
+      Object.assign(keysInventory, progress.keysInventory);
+    }
+  } catch (e) {
+    console.warn('Failed to load progress', e);
+  }
+}
+
+// Load persisted data on startup
 loadCounts();
+loadProgress();
+// Zustand für eingeklappte Schlüssel-Badges laden
+loadKeysBadgesCollapsed();
+// Entdeckte Schlüssel-Raritäten laden (abhängig vom geladenen keysInventory)
+loadKeyDiscovery();
+// Initial Quickslots-Render (falls Gürtel bereits vorhanden)
+renderQuickslots();
 
 // Helper: Erzeugt Slots im Container und gibt Array zurück
 function buildSlots(container, totalSlots) {
@@ -613,20 +2148,72 @@ dom.openBtn.addEventListener('click', async () => {
   // Box-Auswahl temporär deaktivieren
   setBoxSelectionEnabled(false);
 
+  // Prüfe ob ein Schlüssel-Vormerkung aktiv ist und bereite kostenfreie Öffnung vor
+  if (pendingKeyOpen) {
+    try {
+      // Stelle sicher, dass die richtige Ziel-Box geöffnet wird
+      if (boxType !== pendingKeyOpen.targetBox) {
+        boxType = pendingKeyOpen.targetBox; // direkt setzen (wir befinden uns bereits in der Öffnung)
+        updateChestTheme(boxType);
+      }
+      // Schlüsselverbrauch prüfen und anwenden
+      const r = pendingKeyOpen.rarity;
+      if ((keysInventory[r] || 0) > 0) {
+        keysInventory[r] = (keysInventory[r] || 0) - 1;
+        saveProgress();
+        renderKeysButtonBadges();
+        __nextOpenIsFree = true; // nächste Öffnung ist kostenlos
+      }
+    } finally {
+      // Inline-Icon aktualisieren und Vormerkung zurücksetzen – unabhängig vom Ergebnis
+      pendingKeyOpen = null;
+      updateOpenBtnIcon();
+    }
+  }
+
+  // Falls keine Vormerkung aktiv ist, aber wir uns in einem KeyRoom befinden:
+  // versuche automatisch einen passenden Schlüssel zu verbrauchen, oder breche mit Meldung ab.
+  if (!pendingKeyOpen) {
+    const autoRarity = getRarityForKeyRoom(boxType);
+    if (autoRarity) {
+      if ((keysInventory[autoRarity] || 0) > 0) {
+        keysInventory[autoRarity] = (keysInventory[autoRarity] || 0) - 1;
+        saveProgress();
+        renderKeysButtonBadges();
+        __nextOpenIsFree = true; // Öffnung im Raum ist durch Schlüssel "autorisiert"
+        // Icon nach Verbrauch aktualisieren (bleibt Schlüssel, wenn weitere vorhanden sind)
+        updateOpenBtnIcon();
+      } else {
+        alert(`Keine Schlüssel mehr für ${displayRarityName(autoRarity)}!`);
+        // UI zurücksetzen und Öffnung abbrechen
+        dom.openBtn.disabled = false;
+        dom.openBtn.style.opacity = '1';
+        setBoxSelectionEnabled(true);
+        isOpening = false;
+        setSearchingState(false);
+        return;
+      }
+    }
+  }
+
   if (!deductBalanceForBox()) {
     // Bei Fehler wieder aktivieren
     dom.openBtn.disabled = false;
     dom.openBtn.style.opacity = '1';
     setBoxSelectionEnabled(true);
     isOpening = false;
+    setSearchingState(false);
     return;
   }
+  // Starte Such-Animation
+  setSearchingState(true);
   // Box-Konfiguration zum Start der Öffnung einfrieren
   const openBoxType = boxType;
   const columns = boxConfigs[openBoxType].columns || 4;
   const rows = boxConfigs[openBoxType].rows || 3;
   const totalSlots = columns * rows;
-  const itemCount = getWeightedItemCount(openBoxType);
+  const itemCount = (openBoxType === 'Testbox') ? (rarities.length * 2) : getWeightedItemCount(openBoxType);
+  const desiredRarities = (openBoxType === 'Testbox') ? [...rarities, ...rarities] : null;
   let roundValue = 0;
   
   // Container leeren und Grid neu aufbauen
@@ -656,7 +2243,24 @@ dom.openBtn.addEventListener('click', async () => {
 
   for (let i = 0; i < revealSlots.length; i++) {
     const { item } = revealSlots[i];
-  const pulledItem = getRandomItem(openBoxType);
+    const pulledItem = (openBoxType === 'Testbox')
+      ? (() => {
+          const rar = desiredRarities[i % desiredRarities.length];
+          const pool = itemPools[rar] || itemPools.Common;
+          // Erste Reihe: normale Items; zweite Reihe: nur Schlüssel
+          const isSecondRow = i >= rarities.length;
+          let itm;
+          if (isSecondRow) {
+            // Suche den Schlüssel dieser Rarität aus dem Pool
+            const keyItem = pool.find(it => it.isKey);
+            itm = keyItem || sample(pool);
+          } else {
+            // Normale gewichtete Auswahl
+            itm = weightedSampleByDropWeight(pool) || sample(pool);
+          }
+          return { ...itm, rarity: rar, value: Math.floor((itm.value || 0) * getValueMultiplier()) };
+        })()
+      : getRandomItem(openBoxType);
     const name = pulledItem.name || 'Unbekannter Gegenstand';
     const isNew = !discoveredItems.has(name);
 
@@ -739,7 +2343,7 @@ dom.openBtn.addEventListener('click', async () => {
       console.warn('Floating lupe creation failed', e);
     }
 
-    const baseDelay = 480; // Basis-Delay (0.3x für Testzwecke: 1600 * 0.3 = 480ms)
+    const baseDelay = 1600; // Basis-Delay für Untersuchungszeit pro Item
     await sleep(baseDelay * getTempoMultiplier()); // Mit Tempo-Skill anpassen
 
   // Entferne vorläufige Platzhalter-Anzeige und zeige stattdessen das Icon
@@ -750,17 +2354,36 @@ dom.openBtn.addEventListener('click', async () => {
   item.textContent = '';
     // Erzeuge Icon-Element für die Loot-Ansicht
     const iconImg = document.createElement('img');
-    // Verwende den Projektordner Itembilder (gleich wie in Sammlung)
-    iconImg.src = `Itembilder/${pulledItem.icon}`;
-    iconImg.alt = pulledItem.name || '';
+    // Verwende den Projektordner Itembilder mit Unterordner pro Rarität
+    iconImg.src = getItemImagePath(pulledItem.icon, pulledItem.rarity);
+    iconImg.alt = ''; // Leerer alt-Text verhindert Text-Anzeige während des Ladens
+    iconImg.setAttribute('aria-label', pulledItem.name || ''); // Barrierefreiheit über aria-label
     // Fallback: eingebettetes SVG-Placeholder
-    iconImg.onerror = () => {
-      iconImg.onerror = null;
-      iconImg.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='100%' height='100%' fill='%23444' /><text x='50%' y='50%' fill='white' font-size='32' text-anchor='middle' dominant-baseline='central'>?</text></svg>";
-    };
+    {
+      const alternates = getAlternateIconNames(pulledItem.icon);
+      let altIdx = 0;
+      iconImg.onerror = () => {
+        if (altIdx < alternates.length) {
+          // Versuche alternative Schreibweise
+          const nextIcon = alternates[altIdx++];
+          iconImg.src = getItemImagePath(nextIcon, pulledItem.rarity);
+        } else {
+          iconImg.onerror = null;
+          iconImg.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='100%' height='100%' fill='%23444' /><text x='50%' y='50%' fill='white' font-size='32' text-anchor='middle' dominant-baseline='central'>?</text></svg>";
+        }
+      };
+    }
 
-    // keine Tooltip-Listener im Reveal-Flow (native title wurde entfernt)
+    // Icon einfügen
     item.appendChild(iconImg);
+
+    // Schöner Tooltip im Lootfenster: Name + Wert + Beschreibung
+    attachTooltip(item, {
+      name: pulledItem.name,
+      value: pulledItem.value,
+      description: pulledItem.description || '',
+      rarity: pulledItem.rarity || 'Common'
+    });
 
     item.classList.add('revealed');
     // Füge den Glow abhängig von der Seltenheit hinzu (einmalige Animation)
@@ -793,6 +2416,10 @@ dom.openBtn.addEventListener('click', async () => {
       // Falls irgendwas schiefgeht, ignoriere das Glow-Setzen
       console.warn('Failed to set glow on item', e);
     }
+    // Unique Effekt für Legendär & Mythisch
+    if (pulledItem.rarity === 'Legendary' || pulledItem.rarity === 'Mythisch') {
+      triggerRarityEffect(item, pulledItem.rarity);
+    }
     if (revealSlots[i].isNew) {
       // previously highlighted newly discovered items; glow removed
       item.classList.add('newly-discovered');
@@ -803,6 +2430,22 @@ dom.openBtn.addEventListener('click', async () => {
     if (floatingLupe) {
       if (floatingLupe._raf) cancelAnimationFrame(floatingLupe._raf);
       if (floatingLupe.parentElement) floatingLupe.parentElement.removeChild(floatingLupe);
+    }
+
+    // Wenn es ein Schlüssel ist: in Inventar buchen und UI aktualisieren (nach Reveal)
+    if (pulledItem.isKey) {
+      const r = pulledItem.rarity || 'Common';
+      keysInventory[r] = (keysInventory[r] || 0) + 1;
+      saveProgress();
+      // Schlüssel-Rarität als entdeckt markieren
+      try { discoveredKeyRarities.add(r); saveKeyDiscovery(); } catch (_) {}
+      renderKeysButtonBadges();
+      // Wenn Badges eingeklappt sind, roten Hinweispunkt anzeigen
+      if (__keysBadgesCollapsed) setKeysBtnNotify(true);
+      // Effekte: gelber Floating-Text und kurzes Badge-Glühen
+      showKeyFoundEffect(1);
+      // leicht verzögern, damit Badge sicher im DOM ist
+      setTimeout(() => flashKeyBadge(r), 50);
     }
 
     // kein sofortiger Tooltip-Check mehr
@@ -816,19 +2459,44 @@ dom.openBtn.addEventListener('click', async () => {
   // Statistik: Gold tracken
   stats.totalGoldEarned += roundValue;
   
-  // XP hinzufügen (Verkaufswert = XP)
-  addXP(roundValue);
+  // Prüfe ob Mythisch dabei war für delayed level-up
+  const hadMythisch = revealSlots.some(slot => slot.pulledItem && slot.pulledItem.rarity === 'Mythisch');
+  
+  // XP hinzufügen (Verkaufswert = XP) - mit optionalem Delay für Level-Up-Popup
+  // Berücksichtige permanente XP-Boosts und temporäre Boosts aus dem Shop
+  let xpGain = roundValue;
+  const permXPCount = Math.min(1, (permanentUpgrades.permXPBoost || 0));
+  const permXPMult = 1 + (permXPCount * 0.25); // max einmal +25%
+  const tempXPMult = (activeBoosts.xpBoostUses > 0) ? (1 + activeBoosts.xpBoost) : 1; // temporärer Boost
+  xpGain = Math.floor(xpGain * permXPMult * tempXPMult);
+  
+  addXP(xpGain, hadMythisch);
+  
+  // Reduziere temporäre Boost-Uses
+  if (activeBoosts.valueBoostUses > 0) activeBoosts.valueBoostUses--;
+  if (activeBoosts.rarityBoostUses > 0) activeBoosts.rarityBoostUses--;
+  if (activeBoosts.xpBoostUses > 0) activeBoosts.xpBoostUses--;
   
   updateBalance();
+  // Quickslots-Badges refreshen
+  renderQuickslots();
+  
+  // Zeige visuellen Geld-Effekt
+  showEarnedMoneyEffect(roundValue);
   
   // Button wieder aktivieren
   dom.openBtn.disabled = false;
   dom.openBtn.style.opacity = '1';
   // Box-Auswahl wieder aktivieren
   setBoxSelectionEnabled(true);
+  // Suche-Animation beenden
+  setSearchingState(false);
 
   // Öffnung ist beendet
   isOpening = false;
+
+  // Icon am Ende nochmals aktualisieren (falls Schlüsselanzahl sich geändert hat)
+  updateOpenBtnIcon();
 
   // Falls während der Öffnung eine andere Box gewählt wurde, jetzt anwenden
   if (pendingBoxType) {
@@ -849,38 +2517,61 @@ dom.openBtn.addEventListener('click', async () => {
 
 // ======= Level & XP System =======
 // Fügt XP hinzu und prüft auf Level-Up
-function addXP(amount) {
+function addXP(amount, delayLevelUpPopup = false) {
   playerXP += amount;
   
-  // Level-Up prüfen
+  // Level-Up prüfen (mit Level-Cap bei 50)
   let xpNeeded = getXPForLevel(playerLevel);
-  while (playerXP >= xpNeeded) {
+  let leveledUp = false;
+  while (playerXP >= xpNeeded && playerLevel < MAX_LEVEL) {
     playerXP -= xpNeeded;
     playerLevel++;
     skillPoints++;
     xpNeeded = getXPForLevel(playerLevel);
-    
-    // Level-Up Benachrichtigung
-    showLevelUpNotification();
+    leveledUp = true;
+  }
+  
+  // Bei Max-Level überschüssige XP verwerfen
+  if (playerLevel >= MAX_LEVEL) {
+    playerXP = 0;
   }
   
   updateLevelUI();
+  saveProgress(); // Speichere bei Level/XP-Änderung
   
   // Info-Modal aktualisieren falls geöffnet
   if (dom.boxInfoModal && dom.boxInfoModal.style.display === 'block') {
     populateBoxInfo();
   }
+  
+  // Level-Up Benachrichtigung mit optionalem Delay
+  if (leveledUp) {
+    const delay = delayLevelUpPopup ? 1500 : 0; // 1.5s Delay bei Mythisch
+    setTimeout(() => {
+      showLevelUpNotification();
+    }, delay);
+  }
 }
 
 // Zeigt Level-Up Notification
 function showLevelUpNotification() {
+  // Prüfe ob ein neuer Titel freigeschaltet wurde
+  const currentTitle = getCurrentTitle();
+  const hasNewTitle = titles.some(t => t.level === playerLevel);
+  
   const notification = document.createElement('div');
   notification.className = 'level-up-notification';
+  
+  let titleHTML = '';
+  if (hasNewTitle) {
+    titleHTML = `<p class="level-up-title">Neuer Titel: ${currentTitle}</p>`;
+  }
+  
   notification.innerHTML = `
     <div class="level-up-content">
       <h2>🎉 Level Up!</h2>
       <p>Level ${playerLevel} erreicht!</p>
-      <p class="level-up-title">Neuer Titel: ${getCurrentTitle()}</p>
+      ${titleHTML}
       <p class="level-up-skill">+1 Skillpunkt verfügbar!</p>
     </div>
   `;
@@ -909,6 +2600,55 @@ function showLevelUpNotification() {
 function updateBalance() {
   dom.balance.textContent = `💰: ${formatNumber(balance)}`;
   updateBoxAvailability();
+  saveProgress(); // Speichere bei Balance-Änderung
+  // Quickslots (Affordability) aktualisieren
+  renderQuickslots();
+}
+
+// Zeigt einen animierten "+Wert" Effekt beim Verdienen von Geld
+function showEarnedMoneyEffect(amount) {
+  const balanceElement = dom.balance;
+  const rect = balanceElement.getBoundingClientRect();
+  
+  const moneyEffect = document.createElement('div');
+  moneyEffect.className = 'money-earned-effect';
+  moneyEffect.textContent = `+${formatNumber(amount)}`;
+  
+  // Position relativ zum Kontostand
+  moneyEffect.style.left = `${rect.left + rect.width / 2}px`;
+  moneyEffect.style.top = `${rect.top}px`;
+  
+  document.body.appendChild(moneyEffect);
+  
+  // Entfernen nach Animation
+  setTimeout(() => {
+    moneyEffect.remove();
+  }, 2000);
+}
+
+// Zeigt eine gelbe "+Schlüssel"-Animation in der Nähe des Schlüssel-Buttons (Fallback: beim Kontostand)
+function showKeyFoundEffect(amount) {
+  const anchor = (typeof __keysBtn !== 'undefined' && __keysBtn) ? __keysBtn : dom.balance;
+  if (!anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  const fx = document.createElement('div');
+  fx.className = 'key-found-effect';
+  const txt = `+${amount} 🔑`;
+  fx.textContent = txt;
+  fx.style.left = `${rect.left + rect.width / 2}px`;
+  fx.style.top = `${rect.top}px`;
+  document.body.appendChild(fx);
+  setTimeout(() => { if (fx.parentNode) fx.remove(); }, 2000);
+}
+
+// Lässt den Badge der betroffenen Rarität kurz glühen
+function flashKeyBadge(rarity) {
+  if (!__keysBtn) return;
+  const badge = __keysBtn.querySelector(`.key-badge.key-${rarity}`);
+  if (!badge) return;
+  badge.classList.add('key-badge-glow');
+  // nach Animation wieder entfernen
+  setTimeout(() => { badge.classList.remove('key-badge-glow'); }, 950);
 }
 
 // Prüft und aktualisiert die Verfügbarkeit der Box-Buttons basierend auf balance
@@ -938,6 +2678,11 @@ function updateBoxAvailability() {
     const btn = document.getElementById(`boxBtn${i + 1}`);
     
     if (!btn) continue;
+    // Hide Testbox entirely if dev mode is off
+    if (boxName === 'Testbox' && !devMode) {
+      btn.style.display = 'none';
+      continue;
+    }
     
     const isUnlocked = unlockedBoxes.has(boxName);
     const canAfford = balance >= boxCost;
@@ -993,48 +2738,91 @@ function updateBoxAvailability() {
 updateBalance();
 selectBox('Box#1');
 createEmptyGrid(); // Zeigt leeres Grid beim Start
+// Schlüssel-Button einfügen
+ensureKeysButton();
+// Entferne standardmäßiges 🔑 aus dem Öffnen-Button-Label, falls im HTML vorhanden
+try {
+  if (dom.openBtn) {
+      dom.openBtn.innerHTML = 'Öffnen <span class="open-btn-icon"></span>';
+      updateOpenBtnIcon();
+  }
+} catch (_) { /* ignore */ }
 
 // Funktionen für Box-Info Modal
 function computeRarityStats(forBoxType) {
-  const baseWeights = (boxConfigs[forBoxType] && boxConfigs[forBoxType].weights) || {};
-  const weights = applyLuckBonus(baseWeights); // Glück-Bonus einberechnen
+  const cfg = boxConfigs[forBoxType] || {};
+  const baseWeights = (cfg && cfg.weights) || {};
+  const weights = applyLuckBonus(baseWeights, forBoxType); // Glück-Bonus einberechnen (mit boxType)
   const total = rarities.reduce((s, r) => s + (weights[r] || 0), 0) || 0;
-  const stats = rarities.map(rarity => {
+
+  // Rarity row stats
+  const rows = rarities.map(rarity => {
     const w = weights[rarity] || 0;
     const chance = total > 0 ? (w / total) * 100 : 0;
     const pool = itemPools[rarity] || [];
-    // Basis-Durchschnitt berechnen
     const baseAvgValue = pool.length ? Math.round(pool.reduce((a,b)=>a+(b.value||0),0)/pool.length) : 0;
-    // Mit Wohlstand-Multiplikator anwenden
     const avgValue = Math.round(baseAvgValue * getValueMultiplier());
     return { rarity, weight: w, chance, avgValue, poolCount: pool.length };
   });
-  return stats;
+
+  // Erwartete Item-Anzahl pro Öffnung (deterministische Annäherung): Slots * Ziel-Füllrate
+  const columns = cfg.columns || 4;
+  const rowsCount = cfg.rows || 3;
+  const totalSlots = columns * rowsCount;
+  const boxNumber = parseInt((forBoxType || '').replace('Box#',''));
+  const targetFillRate = (forBoxType === 'Testbox')
+    ? (rarities.length / Math.max(1, totalSlots))
+    : ((boxNumber <= 3 || boxNumber >= 6) ? 0.6 : 0.5);
+  const expectedItems = Math.max(1, totalSlots * targetFillRate);
+
+  // Erwarteter Wert pro Item und pro Öffnung
+  const expectedValuePerItem = rows.reduce((sum, r) => sum + (r.chance/100) * r.avgValue, 0);
+  const expectedValuePerOpen = expectedItems * expectedValuePerItem;
+
+  // Erwartete Anzahl Legendär/Mythisch pro Öffnung
+  const chanceLegendary = rows.find(r => r.rarity === 'Legendary')?.chance || 0;
+  const chanceMythic = rows.find(r => r.rarity === 'Mythisch')?.chance || 0;
+  const expectedLegendaryPerOpen = expectedItems * (chanceLegendary/100);
+  const expectedMythicPerOpen = expectedItems * (chanceMythic/100);
+
+  return {
+    rows,
+    expectedItems,
+    expectedValuePerItem,
+    expectedValuePerOpen,
+    expectedLegendaryPerOpen,
+    expectedMythicPerOpen
+  };
 }
 
 function populateBoxInfo() {
   const content = dom.boxInfoContent;
   if (!content) return;
-  const stats = computeRarityStats(boxType);
+  const info = computeRarityStats(boxType);
+  const stats = info.rows;
   
   // Skill-Boni anzeigen
   const valueBonus = ((getValueMultiplier() - 1) * 100).toFixed(0);
   const tempoBonus = ((1 - getTempoMultiplier()) * 100).toFixed(0);
   
-  let html = '<div class="info-header">Gewählte Box: <strong>' + (boxType||'') + '</strong></div>';
+  // Verwende benutzerfreundlichen Box-Namen
+  const displayName = boxDisplayNames[boxType] || boxType;
+  const boxIcon = getBoxIcon(boxType);
+  
+  let html = '<div class="info-header">Gewählte Box: <strong>' + boxIcon + ' ' + displayName + '</strong></div>';
   
   // Skill-Boni anzeigen wenn vorhanden
   if (skills.wohlstand > 0 || skills.glueck > 0 || skills.effizienz > 0) {
     html += '<div class="skill-bonus-info">';
     html += '<strong>🎯 Aktive Skill-Boni:</strong><br>';
     if (skills.wohlstand > 0) {
-      html += `💰 Wohlstand: +${valueBonus}% Item-Wert (+5% pro Punkt)<br>`;
+      html += `💰 Wohlstand: +${valueBonus}% Item-Wert (+3% pro Punkt)<br>`;
     }
     if (skills.glueck > 0) {
       html += `🍀 Glück: Erhöhte Rarity-Chancen (${skills.glueck} Punkte)<br>`;
     }
     if (skills.effizienz > 0) {
-      html += `⚡ Tempo: -${tempoBonus}% Untersuchungszeit (-5% pro Punkt)<br>`;
+      html += `⚡ Tempo: -${tempoBonus}% Untersuchungszeit (-3,5% pro Punkt)<br>`;
     }
     html += '</div>';
   }
@@ -1044,6 +2832,30 @@ function populateBoxInfo() {
     html += `<tr><td class="rarity-name" style="color:${colors[s.rarity]||'#fff'}">${s.rarity}</td><td>${s.avgValue} 💰</td><td>${s.chance.toFixed(2)} %</td></tr>`;
   }
   html += '</tbody></table>';
+
+  // ROI/EV Abschnitt – nur im DEV-Modus anzeigen
+  if (typeof devMode !== 'undefined' && devMode) {
+    const cost = (boxConfigs[boxType] && boxConfigs[boxType].cost) || 0;
+    const evItems = info.expectedItems;
+    const evPerItem = info.expectedValuePerItem;
+    const evPerOpen = info.expectedValuePerOpen;
+    const netPerOpen = evPerOpen - cost;
+    const expLeg = info.expectedLegendaryPerOpen;
+    const expMyth = info.expectedMythicPerOpen;
+
+    const netColor = netPerOpen >= 0 ? '#2ecc71' : '#e74c3c';
+    html += '<div class="stats-section">';
+    html += '<h3>📈 Erwartungswerte (DEV)</h3>';
+    html += `<div class="stat-item"><span class="stat-label">Ø Items pro Öffnung:</span><span class="stat-value">${evItems.toFixed(1)}</span></div>`;
+    html += `<div class="stat-item"><span class="stat-label">Ø Wert pro Item:</span><span class="stat-value">${Math.round(evPerItem).toLocaleString('de-DE')} 💰</span></div>`;
+    html += `<div class="stat-item"><span class="stat-label">Ø Wert pro Öffnung:</span><span class="stat-value">${Math.round(evPerOpen).toLocaleString('de-DE')} 💰</span></div>`;
+    if (cost > 0) {
+      html += `<div class="stat-item"><span class="stat-label">Netto pro Öffnung (nach Kosten):</span><span class="stat-value" style="color:${netColor}">${Math.round(netPerOpen).toLocaleString('de-DE')} 💰</span></div>`;
+    }
+    html += `<div class="stat-item"><span class="stat-label">Ø Legendär pro Öffnung:</span><span class="stat-value">${expLeg.toFixed(2)}</span></div>`;
+    html += `<div class="stat-item"><span class="stat-label">Ø Mythisch pro Öffnung:</span><span class="stat-value">${expMyth.toFixed(2)}</span></div>`;
+    html += '</div>';
+  }
   content.innerHTML = html;
 }
 
@@ -1062,25 +2874,317 @@ if (dom.boxInfoBtn) {
 
 const infoClose = dom.boxInfoModal && dom.boxInfoModal.querySelector('.info-close');
 if (infoClose) {
-  infoClose.addEventListener('click', () => {
-    dom.boxInfoModal.style.display = 'none';
+  infoClose.addEventListener('click', (e) => {
+    e.stopPropagation(); // Verhindere Bubble zum Modal
+    dom.boxInfoModal.style.setProperty('display', 'none', 'important');
   });
 }
 // close on ESC
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && dom.boxInfoModal && dom.boxInfoModal.style.display === 'block') {
-    dom.boxInfoModal.style.display = 'none';
+    dom.boxInfoModal.style.setProperty('display', 'none', 'important');
   }
 });
 // close clicking outside content
 if (dom.boxInfoModal) {
+  const infoContent = dom.boxInfoModal.querySelector('.info-content');
+  
   dom.boxInfoModal.addEventListener('click', (e) => {
-    if (e.target === dom.boxInfoModal) dom.boxInfoModal.style.display = 'none';
+    // Schließen wenn NICHT auf die Content-Box geklickt wurde
+    if (infoContent && !infoContent.contains(e.target)) {
+      dom.boxInfoModal.style.setProperty('display', 'none', 'important');
+    }
   });
 }
 
 // Sammlung-Button
 dom.collectionBtn.addEventListener('click', showCollection);
+
+// Shop-Button: wie Skills-Overlay toggeln (auf/zu)
+dom.shopBtn.addEventListener('click', () => {
+  if (!dom.shopModal) return;
+  if (dom.shopModal.style.display === 'block') {
+    closeShop();
+  } else {
+    showShop();
+  }
+});
+dom.closeShopBtn.addEventListener('click', closeShop);
+
+function showShop() {
+  if (!dom.shopModal || !dom.shopContent || !dom.shopBalance) return;
+  
+  // Aktualisiere Guthaben-Anzeige
+  dom.shopBalance.textContent = formatNumber(balance);
+  
+  // Shop-Inhalt aufbauen (in Kategorien)
+  dom.shopContent.innerHTML = '';
+
+  const makeSection = (title) => {
+    const sec = document.createElement('div');
+    sec.className = 'shop-section';
+    const h = document.createElement('h3');
+    h.textContent = title;
+    sec.appendChild(h);
+    const grid = document.createElement('div');
+    grid.className = 'shop-grid';
+    sec.appendChild(grid);
+    dom.shopContent.appendChild(sec);
+    return grid;
+  };
+
+  // 1) Ausrüstung
+  const equipGrid = makeSection('Ausrüstung');
+  for (const [itemId, item] of Object.entries(shopItems).filter(([, it]) => it.type === 'perm')) {
+    const branch = document.createElement('div');
+    branch.className = 'skill-branch';
+    const canAfford = balance >= item.cost;
+    // Besitz-Info (einmalig kaufbar)
+    const effectType = item.effect.type;
+    const owned = ((permanentUpgrades[effectType] || 0) >= 1) || purchasedItems.has(itemId);
+    const priceHTML = !owned ? `<span class=\"price ${!canAfford ? 'unaffordable' : ''}\">${formatNumber(item.cost)} 💰</span>` : '';
+    const btnLabel = owned ? '✔️ Gekauft' : `${priceHTML}`;
+    const btnClass = `upgrade-btn shop-buy-btn${(canAfford && !owned) ? ' affordable' : ''}${owned ? ' purchased' : ''}`;
+    branch.innerHTML = `
+      <h3>${item.icon} ${item.name}</h3>
+      <p class=\"skill-description\">${item.description}</p>
+      <button class=\"${btnClass}\" data-item-id=\"${itemId}\" ${(owned || !canAfford) ? 'disabled' : ''}>${btnLabel}</button>
+    `;
+    equipGrid.appendChild(branch);
+  }
+
+  // 2) Stats
+  const statGrid = makeSection('Stats');
+  for (const [key, cfg] of Object.entries(shopStatUpgrades)) {
+    const branch = document.createElement('div');
+    branch.className = 'skill-branch';
+    const lvl = statUpgradesLevels[key] || 0;
+    const cost = getStatUpgradeCost(key);
+    const canAfford = balance >= cost;
+    const effectLine = (() => {
+      if (cfg.perLevel.type === 'wealth') return `Aktueller Bonus: +${(lvl * 2).toFixed(0)}% Wert`;
+      if (cfg.perLevel.type === 'luck') return `Aktueller Bonus: +${lvl} Glück`;
+      if (cfg.perLevel.type === 'tempo') return `Aktueller Bonus: -${(lvl * 2).toFixed(0)}% Zeit`;
+      return '';
+    })();
+    const priceHTML = `<span class=\"price ${!canAfford ? 'unaffordable' : ''}\">${formatNumber(cost)} 💰</span>`;
+    const btnClass = `upgrade-btn shop-stat-buy${canAfford ? ' affordable' : ''}`;
+    branch.innerHTML = `
+      <h3>${cfg.icon} ${cfg.name}</h3>
+      <p class=\"skill-description\">${cfg.description}<br><span style=\"color:#9b59b6;\">Stufe ${lvl}</span><br><span>${effectLine}</span></p>
+      <button class=\"${btnClass}\" data-stat-key=\"${key}\" ${!canAfford ? 'disabled' : ''}>${priceHTML}</button>
+    `;
+    statGrid.appendChild(branch);
+  }
+
+  // 3) Tränke
+  const tempGrid = makeSection('Tränke');
+  for (const [itemId, item] of Object.entries(shopItems).filter(([, it]) => it.type === 'temp')) {
+    const branch = document.createElement('div');
+    branch.className = 'skill-branch';
+    const canAfford = balance >= item.cost;
+    // Aktive Uses anzeigen
+    const boostType = item.effect.type;
+    const usesKey = boostType + 'Uses';
+    const activeUses = activeBoosts[usesKey] || 0;
+    const usesText = activeUses > 0 ? `<br><span style=\"color:#2ecc71;\">Aktiv: ${activeUses} Öffnungen übrig</span>` : '';
+    const iconHTML = renderPotionIconHTML(item.icon);
+  const beltNote = (permanentUpgrades.permPotionBelt || 0) >= 1 ? `<br><span style=\"color:#f1c40f;\">+1 Aufladung pro Kauf</span>` : '';
+    const priceHTML = `<span class=\"price ${!canAfford ? 'unaffordable' : ''}\">${formatNumber(item.cost)} 💰</span>`;
+    const btnClass = `upgrade-btn shop-buy-btn${canAfford ? ' affordable' : ''}`;
+    branch.innerHTML = `
+      <h3>${iconHTML} ${item.name}</h3>
+      <p class=\"skill-description\">${item.description}${usesText}${beltNote}</p>
+      <button class=\"${btnClass}\" data-item-id=\"${itemId}\" ${!canAfford ? 'disabled' : ''}>${priceHTML}</button>
+    `;
+    tempGrid.appendChild(branch);
+  }
+
+  // Button-Handler
+  dom.shopContent.querySelectorAll('.shop-buy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const itemId = btn.dataset.itemId;
+      purchaseShopItem(itemId);
+    });
+  });
+  dom.shopContent.querySelectorAll('.shop-stat-buy').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.statKey;
+      purchaseStatUpgrade(key);
+    });
+  });
+
+  dom.shopModal.style.display = 'block';
+}
+
+function purchaseShopItem(itemId) {
+  const item = shopItems[itemId];
+  if (!item) return;
+  
+  // Prüfe ob genug Geld vorhanden
+  if (balance < item.cost) {
+    alert('Nicht genug Geld!');
+    return;
+  }
+  
+  // Ziehe Kosten ab
+  balance -= item.cost;
+  updateBalance();
+  
+  // Wende Effekt an
+  const effect = item.effect;
+  
+  if (item.type === 'temp') {
+    // Temporäre Boosts: addiere Uses
+    const usesKey = effect.type + 'Uses';
+    const valueKey = effect.type;
+    const hasBelt = (permanentUpgrades.permPotionBelt || 0) >= 1;
+    const bonus = hasBelt ? 1 : 0;
+    activeBoosts[usesKey] = (activeBoosts[usesKey] || 0) + effect.uses + bonus;
+    activeBoosts[valueKey] = effect.value;
+  } else if (item.type === 'perm') {
+    // Permanente Ausrüstung: nur einmal kaufbar
+    if ((permanentUpgrades[effect.type] || 0) >= 1 || purchasedItems.has(itemId)) {
+      // bereits vorhanden – rückerstatte vorsichtshalber und zeige Meldung
+      balance += item.cost;
+      updateBalance();
+      alert('Dieses Ausrüstungsitem wurde bereits gekauft.');
+      return;
+    }
+    permanentUpgrades[effect.type] = 1; // genau einmal
+    purchasedItems.add(itemId);
+  }
+  
+  // Speichere Fortschritt
+  saveProgress();
+  
+  // Aktualisiere Shop-Anzeige nur, wenn sie offen ist
+  if (dom.shopModal && dom.shopModal.style.display === 'block') {
+    showShop();
+  }
+  // Nach Käufen UI-Quickslots aktualisieren
+  renderQuickslots();
+}
+
+function purchaseStatUpgrade(key) {
+  const cfg = shopStatUpgrades[key];
+  if (!cfg) return;
+  const cost = getStatUpgradeCost(key);
+  if (balance < cost) {
+    alert('Nicht genug Geld!');
+    return;
+  }
+  balance -= cost;
+  statUpgradesLevels[key] = (statUpgradesLevels[key] || 0) + 1;
+  updateBalance();
+  saveProgress();
+  showShop();
+}
+
+function closeShop() {
+  if (!dom.shopModal) return;
+  dom.shopModal.style.display = 'none';
+}
+
+// Shop-Overlay: Klick auf Hintergrund schließt, wie beim Skills-Overlay
+if (dom.shopModal) {
+  dom.shopModal.addEventListener('click', (e) => {
+    if (e.target === dom.shopModal) {
+      closeShop();
+    }
+  });
+}
+
+// Dev Money Button
+if (devMoneyBtn) {
+  devMoneyBtn.addEventListener('click', () => {
+    balance += 1000000;
+    updateBalance();
+    saveProgress();
+  });
+}
+
+// Reset-Button
+dom.resetBtn.addEventListener('click', () => {
+  if (confirm('Möchtest du deinen gesamten Fortschritt zurücksetzen? Dies kann nicht rückgängig gemacht werden!')) {
+    resetProgress();
+    // Sammlung schließen nach dem Reset
+    closeCollection();
+  }
+});
+
+function resetProgress() {
+  // Sammlung & Items zurücksetzen
+  discoveredItems.clear();
+  lastPulledItems.clear();
+  for (let key in itemCounts) {
+    delete itemCounts[key];
+  }
+  
+  // LocalStorage löschen
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(PROGRESS_KEY);
+  } catch (e) {
+    console.warn('Failed to clear localStorage', e);
+  }
+  
+  // Level & Skills zurücksetzen
+  playerLevel = 0;
+  playerXP = 0;
+  skillPoints = 0;
+  skills.wohlstand = 0;
+  skills.glueck = 0;
+  skills.effizienz = 0;
+  
+  // Shop-Daten zurücksetzen
+  activeBoosts = {
+    valueBoost: 0,
+    rarityBoost: 0,
+    xpBoost: 0,
+    valueBoostUses: 0,
+    rarityBoostUses: 0,
+    xpBoostUses: 0
+  };
+  permanentUpgrades = {
+    permTempoBoost: 0,
+    permValueBoost: 0,
+    permXPBoost: 0
+  };
+  purchasedItems.clear();
+  // Schlüssel-Inventar zurücksetzen
+  keysInventory = { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 };
+  // Stackbare Status-Upgrades zurücksetzen
+  statUpgradesLevels = { wealth: 0, luck: 0, tempo: 0 };
+  
+  // Balance & Box zurücksetzen
+  balance = 500;
+  boxType = "Box#1";
+  unlockedBoxes.clear();
+  unlockedBoxes.add("Box#1");
+  
+  // Statistiken zurücksetzen
+  stats.totalBoxesOpened = 0;
+  stats.totalItemsPulled = 0;
+  stats.totalGoldEarned = 0;
+  stats.mostValuableItem = { name: '', value: 0, rarity: '' };
+  for (let key in stats.boxOpenCounts) {
+    stats.boxOpenCounts[key] = 0;
+  }
+  
+  // UI aktualisieren
+  updateLevelUI();
+  updateBalance();
+  updateSkillDisplay();
+  selectBox("Box#1");
+  
+  // Sammlung schließen (falls geöffnet)
+  if (dom.collectionOverlay) {
+    dom.collectionOverlay.style.display = 'none';
+  }
+  
+  alert('Fortschritt wurde zurückgesetzt!');
+}
 
 function showCollection() {
   const grid = dom.collectionGrid;
@@ -1091,8 +3195,12 @@ function showCollection() {
     const section = document.createElement('div');
     section.classList.add('rarity-section');
 
+    // Zähle entdeckte Items dieser Rarität
+    const totalItems = (itemPools[rarity] || []).length;
+    const discoveredCount = (itemPools[rarity] || []).filter(item => discoveredItems.has(item.name)).length;
+
     const sectionTitle = document.createElement('h2');
-    sectionTitle.textContent = rarity;
+    sectionTitle.textContent = `${rarity} (${discoveredCount}/${totalItems})`;
     sectionTitle.style.color = colors[rarity] || '#fff';
     section.appendChild(sectionTitle);
 
@@ -1106,17 +3214,26 @@ function showCollection() {
   const img = document.createElement('img');
   // Bilder liegen im Ordner "Itembilder" (Projektstruktur).
   // Früher wurde `icons/` verwendet – das führt zu fehlenden Bildern.
-      img.src = `Itembilder/${item.icon}`;
+      img.src = getItemImagePath(item.icon, rarity);
       // Alt-Text für Barrierefreiheit
       img.alt = item.name || '';
       // Fallback: falls die Datei fehlt, setze ein eingebettetes SVG-Placeholder (kein 404)
-      img.onerror = () => {
-        // Einfaches SVG mit Fragezeichen als Data-URL
-        img.onerror = null; // Verhindere Loop, falls SVG wider Erwarten auch nicht lädt
-        img.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='100%' height='100%' fill='%23444' /><text x='50%' y='50%' fill='white' font-size='32' text-anchor='middle' dominant-baseline='central'>?</text></svg>";
-      };
+      {
+        const alternates = getAlternateIconNames(item.icon);
+        let altIdx = 0;
+        img.onerror = () => {
+          if (altIdx < alternates.length) {
+            const nextIcon = alternates[altIdx++];
+            img.src = getItemImagePath(nextIcon, rarity);
+          } else {
+            // Einfaches SVG mit Fragezeichen als Data-URL
+            img.onerror = null; // Verhindere Loop
+            img.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='100%' height='100%' fill='%23444' /><text x='50%' y='50%' fill='white' font-size='32' text-anchor='middle' dominant-baseline='central'>?</text></svg>";
+          }
+        };
+      }
 
-      // keine Tooltip-Events am Icon
+  // Tooltip in der Sammlung: Name + Wert + Beschreibung (oder unbekannt)
 
       if (discoveredItems.has(item.name)) {
         img.style.backgroundColor = colors[rarity];
@@ -1124,6 +3241,13 @@ function showCollection() {
         const label = document.createElement('div');
         label.textContent = item.name;
         div.appendChild(label);
+        // Tooltip für bekannte Items (schön formatiert)
+        attachTooltip(div, {
+          name: item.name,
+          value: item.value,
+          description: item.description || '',
+          rarity
+        });
 
         // Anzeigen des Sammelzählers als kleines Badge
         const count = itemCounts[item.name] || 0;
@@ -1143,9 +3267,16 @@ function showCollection() {
         const label = document.createElement('div');
         label.textContent = '???';
         div.appendChild(label);
+        // Tooltip für unbekannte Items
+        attachTooltip(div, {
+          name: '???',
+          value: null,
+          description: 'Noch unbekannt.',
+          rarity
+        });
       }
 
-      // keine Tooltip-Listener mehr am Wrapper
+      // Tooltip wird über die Custom-Tooltip-Komponente bereitgestellt
 
       rarityContainer.appendChild(div);
     }
@@ -1245,12 +3376,18 @@ function closeStats() {
 // ======= Level & Skills UI Functions =======
 function updateLevelUI() {
   const xpNeeded = getXPForLevel(playerLevel);
-  const xpPercent = (playerXP / xpNeeded) * 100;
+  const xpPercent = (playerLevel >= MAX_LEVEL) ? 100 : (playerXP / xpNeeded) * 100;
   
   dom.playerLevel.textContent = `Level ${playerLevel}`;
   dom.playerTitle.textContent = getCurrentTitle();
   dom.xpBar.style.width = `${xpPercent}%`;
-  dom.xpText.textContent = `${playerXP} / ${xpNeeded} XP`;
+  
+  if (playerLevel >= MAX_LEVEL) {
+    dom.xpText.textContent = `MAX LEVEL`;
+  } else {
+    dom.xpText.textContent = `${playerXP} / ${xpNeeded} XP`;
+  }
+  
   dom.skillPointsDisplay.textContent = skillPoints;
   dom.availablePoints.textContent = skillPoints;
   
@@ -1299,6 +3436,7 @@ dom.upgradeWohlstand.addEventListener('click', () => {
     skills.wohlstand++;
     skillPoints--;
     updateLevelUI();
+    saveProgress(); // Speichere bei Skill-Änderung
     
     // Info-Modal aktualisieren falls geöffnet
     if (dom.boxInfoModal && dom.boxInfoModal.style.display === 'block') {
@@ -1312,6 +3450,7 @@ dom.upgradeGlueck.addEventListener('click', () => {
     skills.glueck++;
     skillPoints--;
     updateLevelUI();
+    saveProgress(); // Speichere bei Skill-Änderung
     
     // Info-Modal aktualisieren falls geöffnet
     if (dom.boxInfoModal && dom.boxInfoModal.style.display === 'block') {
@@ -1325,6 +3464,7 @@ dom.upgradeEffizienz.addEventListener('click', () => {
     skills.effizienz++;
     skillPoints--;
     updateLevelUI();
+    saveProgress(); // Speichere bei Skill-Änderung
     
     // Info-Modal aktualisieren falls geöffnet
     if (dom.boxInfoModal && dom.boxInfoModal.style.display === 'block') {

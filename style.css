@@ -20,8 +20,9 @@ body {
 }
 
 #balance {
-  font-size: 18px;
+  font-size: 28px;
   margin-bottom: 10px;
+  font-weight: bold;
 }
 
 #containerSelection {
@@ -42,6 +43,410 @@ body {
   gap: 10px;
 }
 
+/* Play row: loot grid left, character/chest animation right */
+#playRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 20px;
+}
+
+#containerWrapper {
+  position: relative;
+  display: inline-block;
+  margin: 0; /* entferne auto-margin */
+}
+
+#lootContainer {
+  /* Loot-Grid bleibt zentriert */
+  flex-shrink: 0;
+}
+
+/* Right-side animation area */
+#searchAnim {
+  position: relative;
+  width: 220px; /* mehr Platz, damit die Kiste rechts neben der Figur passt */
+  height: 200px;
+  --ground-h: 26px; /* Basis-Höhe des Grasbodens */
+  transform: scale(0.7); /* 30% kleiner */
+  transform-origin: bottom center;
+  flex-shrink: 0; /* verhindert Schrumpfen bei kleinem Viewport */
+  display: none; /* Komplette Animation ausblenden */
+}
+
+/* Grass ground for the character to stand on */
+#searchAnim .ground {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: var(--ground-h);
+  background: linear-gradient(180deg, #6ad05a 0%, #41a749 70%, #317d37 100%);
+  border: 2px solid #000;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  box-shadow: inset 0 3px 0 rgba(255,255,255,0.12);
+  z-index: 1;
+}
+
+#searchAnim .ground::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 40%, rgba(255,255,255,0.15) 0 6px, transparent 7px),
+    radial-gradient(ellipse at 60% 35%, rgba(255,255,255,0.12) 0 5px, transparent 6px),
+    radial-gradient(ellipse at 85% 45%, rgba(255,255,255,0.1) 0 4px, transparent 5px);
+  pointer-events: none;
+}
+
+#searchAnim .ground::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: -6px;
+  height: 8px;
+  background: linear-gradient(180deg, #6b4423, #3a2412);
+  border: 2px solid #000;
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+}
+
+#searchAnim .character {
+  position: absolute;
+  bottom: var(--ground-h); /* Füße stehen oben auf dem Gras */
+  left: 20px;
+  width: 80px;
+  height: 140px;
+  transform-origin: bottom center;
+  transition: none; /* Sofortiger Wechsel zwischen Idle und Suchen in beide Richtungen */
+  z-index: 3;
+  display: none; /* Figur komplett ausblenden */
+}
+
+/* Idle subtle bob */
+@keyframes idleBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+/* Idle: nur Oberkörper wackelt, Füße bleiben fest auf dem Boden */
+@keyframes bobSway {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-2.2deg); }
+}
+
+/* nicht die ganze Figur animieren, nur Body+Head */
+#searchAnim .character.idle .body {
+  animation: bobSway 2.2s ease-in-out infinite;
+}
+#searchAnim .character.idle .head {
+  animation: bobSway 2.2s ease-in-out infinite;
+}
+
+/* Character parts */
+#searchAnim .head {
+  position: absolute;
+  top: 0;
+  left: 20px;
+  width: 38px;
+  height: 38px;
+  background: radial-gradient(circle at 35% 35%, #ffd99f, #f2bd78);
+  border-radius: 50%;
+  border: 2px solid #000;
+  box-shadow: 0 2px 0 rgba(0,0,0,0.15);
+  transform-origin: bottom center;
+  z-index: 3; /* head above torso */
+}
+
+/* Cartoon eyes and mouth */
+#searchAnim .head::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 10px;
+  height: 12px;
+  background:
+    radial-gradient(circle at 12px 6px, #000 0 3px, transparent 4px),
+    radial-gradient(circle at 26px 6px, #000 0 3px, transparent 4px);
+  opacity: 0.95;
+}
+#searchAnim .head::after {
+  content: '';
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  width: 14px;
+  height: 9px;
+  border: 2px solid #000;
+  border-top: none;
+  border-radius: 0 0 14px 14px;
+  transform: translateX(-50%);
+}
+
+#searchAnim .body {
+  position: absolute;
+  top: 30px;
+  left: 17px;
+  width: 44px;
+  height: 64px;
+  background: linear-gradient(180deg, #5aa2ff, #2f6fe0);
+  border-radius: 10px;
+  border: 2px solid #000;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.15);
+  transform-origin: bottom center; /* wackeln/kippen um die Hüfte */
+  z-index: 2;
+}
+
+#searchAnim .arm {
+  position: absolute;
+  top: 38px;
+  width: 10px;
+  height: 50px;
+  background: linear-gradient(180deg, #5aa2ff, #2f6fe0);
+  border-radius: 6px;
+  border: 2px solid #000;
+  transform-origin: top center;
+  z-index: 3; /* arms above torso */
+}
+#searchAnim .arm.left { left: 6px; }
+#searchAnim .arm.right { right: 6px; }
+
+#searchAnim .leg {
+  position: absolute;
+  bottom: 0;
+  width: 12px;
+  height: 44px;
+  background: #222;
+  border-radius: 4px;
+  border: 2px solid #000;
+  transform-origin: top center;
+}
+#searchAnim .leg.left { left: 24px; }
+#searchAnim .leg.right { left: 42px; }
+
+/* Chest */
+#searchAnim .chest {
+  position: absolute;
+  bottom: var(--ground-h); /* Kiste steht auf dem Gras */
+  left: 120px; /* rechts neben der Figur */
+  width: 100px;
+  height: 78px;
+  pointer-events: none;
+  opacity: 1; /* dauerhaft sichtbar */
+  transform: translateY(0) scale(1);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  z-index: 2;
+}
+
+#searchAnim .chest-body {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 60px;
+  background: linear-gradient(180deg, #b37436, #6b4423);
+  border: 3px solid #000;
+  border-radius: 8px 8px 10px 10px;
+  box-shadow: inset 0 6px 0 rgba(0,0,0,0.12), 0 6px 10px rgba(0,0,0,0.35);
+}
+
+#searchAnim .chest-lid {
+  position: absolute;
+  bottom: 54px;
+  left: 0px;            /* bündig mit der Kistenbreite */
+  width: 100px;         /* Deckel so lang wie die Kiste */
+  height: 28px;
+  background: linear-gradient(180deg, #d2863e, #8b5a2b);
+  border: 3px solid #000;
+  border-radius: 12px 12px 4px 4px;
+  transform-origin: right bottom; /* Deckel klappt nach rechts auf */
+  transform: rotate(0deg); /* im Idle gerade aufliegend */
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+/* ====== Cartoon-Rummage Particles (Subtil) ====== */
+.rummage-particle {
+  position: absolute;
+  pointer-events: none;
+  z-index: 5000; /* über Beinen und Kiste */
+  opacity: 0.9;
+  transform: translate(0, 0) scale(0.8) rotate(0deg);
+  animation: particlePop 1000ms ease-out forwards;
+  font-size: 16px;
+  line-height: 1;
+  text-align: center;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3));
+}
+
+/* Schwarze Staub-Punkte */
+.rummage-particle.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #333;
+  border: 1px solid #000;
+}
+
+/* Feder (emoji oder kleiner text) */
+.rummage-particle.feather::before {
+  content: '🪶';
+  font-size: 14px;
+}
+
+/* Zahnrad */
+.rummage-particle.gear::before {
+  content: '⚙️';
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+@keyframes particlePop {
+  0% {
+    opacity: 0.0;
+    transform: translate(0, 0) scale(0.5) rotate(0deg);
+  }
+  10% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1.0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx, 0px), var(--dy, -40px)) scale(0.9) rotate(var(--rot, 0deg));
+  }
+}
+
+/* Box-Themes: passen die Kistenoptik je gewählter Box an */
+#searchAnim.theme-box-1 .chest-body { background: linear-gradient(180deg, #b37436, #6b4423); }
+#searchAnim.theme-box-1 .chest-lid  { background: linear-gradient(180deg, #d2863e, #8b5a2b); }
+
+#searchAnim.theme-box-2 .chest-body { background: linear-gradient(180deg, #4a6ea9, #2e4572); }
+#searchAnim.theme-box-2 .chest-lid  { background: linear-gradient(180deg, #6a8fd1, #3e5f9f); }
+
+#searchAnim.theme-box-3 .chest-body { background: linear-gradient(180deg, #bfc6cf, #7c8794); }
+#searchAnim.theme-box-3 .chest-lid  { background: linear-gradient(180deg, #e0e6ee, #9aa6b5); }
+
+#searchAnim.theme-box-4 .chest-body { background: linear-gradient(180deg, #d4a017, #8a6b0a); }
+#searchAnim.theme-box-4 .chest-lid  { background: linear-gradient(180deg, #ffd75a, #c79b1f); }
+
+#searchAnim.theme-box-5 .chest-body { background: linear-gradient(180deg, #557a47, #2f4a28); }
+#searchAnim.theme-box-5 .chest-lid  { background: linear-gradient(180deg, #76a066, #3f6a3a); }
+
+#searchAnim.theme-box-6 .chest-body { background: linear-gradient(180deg, #6d6d6d, #3b3b3b); }
+#searchAnim.theme-box-6 .chest-lid  { background: linear-gradient(180deg, #9a9a9a, #5a5a5a); }
+
+#searchAnim.theme-box-7 .chest-body { background: linear-gradient(180deg, #b8328c, #7a205d); }
+#searchAnim.theme-box-7 .chest-lid  { background: linear-gradient(180deg, #ff4fb6, #b8328c); }
+
+#searchAnim.theme-testbox .chest-body { background: linear-gradient(180deg, #2aa198, #145c59); }
+#searchAnim.theme-testbox .chest-lid  { background: linear-gradient(180deg, #3fd1c6, #1e7d78); }
+
+/* Searching state: show chest and dip character into it */
+#searchAnim.searching .chest {
+  opacity: 1; /* unverändert, nur der Deckel animiert */
+}
+
+/* Emoji-Icon für die Kiste (Box-Icons) */
+#searchAnim .chest-emoji {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 32px;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,0.4));
+  pointer-events: none;
+  z-index: 3;
+}
+
+#searchAnim.searching .character {
+  /* Charakter in Richtung Kiste verschieben und leicht anheben,
+     damit die Beine oberhalb der Kistenöffnung sichtbar sind */
+  transform: translate(88px, -20px);
+  transition: none;
+  z-index: 2; /* beim Wühlen liegt die Kiste darüber, um das Eintauchen zu verdecken */
+}
+
+#searchAnim.searching .character .body,
+#searchAnim.searching .character .head {
+  /* Übergangsanimation (Eintauchen) komplett streichen */
+  animation: none !important;
+  transform: none !important;
+}
+
+@keyframes bodyDip {
+  to { transform: rotate(55deg) translate(14px, 12px); }
+}
+
+@keyframes headDip {
+  to { transform: rotate(42deg) translate(18px, 10px); }
+}
+
+/* Rummage: arms wiggle alternately while searching */
+@keyframes rummageLeft {
+  0% { transform: rotate(-20deg); }
+  50% { transform: rotate(-55deg) translateY(-2px); }
+  100% { transform: rotate(-20deg); }
+}
+@keyframes rummageRight {
+  0% { transform: rotate(20deg); }
+  50% { transform: rotate(55deg) translateY(-2px); }
+  100% { transform: rotate(20deg); }
+}
+
+#searchAnim.searching .arm.left { animation: rummageLeft 0.5s ease-in-out infinite; }
+#searchAnim.searching .arm.right { animation: rummageRight 0.5s ease-in-out infinite; }
+
+/* Beine wackeln sichtbar aus der Kiste heraus (um 180° gedreht) */
+@keyframes legWiggleLeft {
+  0% { transform: rotate(170deg); }
+  50% { transform: rotate(200deg); }
+  100% { transform: rotate(170deg); }
+}
+@keyframes legWiggleRight {
+  0% { transform: rotate(190deg); }
+  50% { transform: rotate(160deg); }
+  100% { transform: rotate(190deg); }
+}
+
+/* Basisrotation für den Start des Suchens; Animation übersteuert diese bei Bedarf */
+#searchAnim.searching .leg { transform: rotate(180deg); }
+#searchAnim.searching .leg.left { animation: legWiggleLeft 0.6s ease-in-out infinite; }
+#searchAnim.searching .leg.right { animation: legWiggleRight 0.6s ease-in-out infinite; }
+
+/* Lid subtle wobble while searching for extra cartoon feel */
+@keyframes lidWobble {
+  0% { transform: rotate(110deg); }
+  50% { transform: rotate(100deg); }
+  100% { transform: rotate(110deg); }
+}
+
+@keyframes lidOpen {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(110deg); }
+}
+
+/* Während des Suchens Deckel komplett öffnen und leicht wackeln */
+#searchAnim.searching .chest {
+  z-index: 4; /* liegt über der Figur und verdeckt den Oberkörper */
+}
+
+#searchAnim.searching .chest-lid {
+  animation: lidOpen 0.28s ease-out forwards,
+             lidWobble 0.6s ease-in-out 0.28s infinite;
+}
+
+/* Beim Suchen: Oberkörper verschwindet in der Kiste, Beine bleiben sichtbar */
+#searchAnim.searching .character .head,
+#searchAnim.searching .character .body,
+#searchAnim.searching .character .arm {
+  z-index: 1; /* unter der Kiste */
+  opacity: 0; /* vollständig unsichtbar während des Suchens */
+}
+#searchAnim.searching .chest { z-index: 3; }
+#searchAnim.searching .leg { z-index: 4; } /* Beine über der Kiste sichtbar */
+
 #openBtn {
   transition: all 0.3s ease;
   cursor: pointer;
@@ -59,7 +464,199 @@ body {
   overflow: hidden;
 }
 
+/* Inline-Icon direkt hinter dem Text "Öffnen" */
+#openBtn .open-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+  font-size: 22px; /* für Emoji-Icons (Boxen) */
+  line-height: 1;
+}
+#openBtn .open-btn-icon img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+/* Key-Mode: PNG mit raritätsfarbener Kachel, leicht nach unten versetzt */
+#openBtn .open-btn-icon.key-mode {
+  padding: 2px 3px;
+  border-radius: 6px;
+  transform: translateY(2px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+}
+
+/* Ausgegrauter Schlüssel, wenn im KeyRoom keine passenden Schlüssel mehr vorhanden sind */
+#openBtn .open-btn-icon.key-mode.disabled {
+  filter: grayscale(100%);
+  opacity: 0.6;
+  background: #555 !important;
+  box-shadow: none;
+}
+
+/* Indikator wenn nächste Öffnung mit Schlüssel erfolgt */
+#openBtn .open-key-indicator {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: rgba(0,0,0,0.6); /* überschrieben via inline backgroundColor */
+  border: 2px solid #f1c40f; /* überschrieben via inline borderColor */
+  border-radius: 999px;
+  padding: 2px 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+#openBtn .open-key-indicator img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+/* Buttonzeile für Shop (links), Öffnen (Mitte) und Schlüssel (rechts) */
+#actionButtons {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Linke Seite: Shop + Quickslots */
+#shopBtn, .quickslots {
+  grid-column: 1;
+  justify-self: end;
+}
+
+/* Mitte: Öffnen-Button */
+#openBtn {
+  grid-column: 2;
+  justify-self: center;
+}
+
+/* Rechte Seite: Schlüssel-Button */
+#keysBtn {
+  grid-column: 3;
+  justify-self: start;
+  position: relative; /* für den Benachrichtigungspunkt oben rechts */
+}
+
+/* Kleiner Pfeil rechts im Schlüssel-Button zum Auf-/Zuklappen */
+#keysBtn .keys-toggle-arrow {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 16px;
+  opacity: 0.85;
+}
+#keysBtn .keys-toggle-arrow:hover {
+  opacity: 1;
+}
+
+/* Roter Benachrichtigungspunkt am Schlüssel-Button (oben rechts) */
+#keysBtn .keys-notify-dot {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #e74c3c;
+  box-shadow: 0 0 10px rgba(231,76,60,0.7), 0 0 20px rgba(231,76,60,0.35);
+  border: 2px solid rgba(0,0,0,0.6);
+  pointer-events: none;
+}
+
+/* Quickslots (Trankgürtel) neben dem Shop-Button */
+.quickslots {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* (Entfernt) Dropdown-Schlüsselvorschau – ersetzt durch ein-/ausklappbare Badges im Button */
+.quickslot-btn {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 2px solid #666;
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  cursor: pointer;
+}
+.quickslot-btn .potion-icon { width: 26px; height: 26px; }
+.quickslot-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.quickslot-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.12);
+  border-color: #888;
+}
+.quickslot-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #2ecc71;
+  color: #111;
+  border: 2px solid #0e5429;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 6px;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* Trank-Icon (SVG-basiert, skalierbar) */
+.potion-icon {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  display: inline-block;
+  vertical-align: middle;
+}
+.potion-icon svg { width: 100%; height: 100%; display: block; }
+
+#shopBtn {
+  transition: all 0.3s ease;
+  cursor: pointer;
+  font-size: 18px; /* etwas kleiner als Öffnen */
+  padding: 10px 24px; /* kompaktere Abmessungen */
+  font-weight: bold;
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+  border: 3px solid #f1c40f;
+  border-radius: 10px;
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+  box-shadow: 0 4px 15px rgba(243, 156, 18, 0.4),
+              inset 0 -3px 10px rgba(0,0,0,0.2);
+  position: relative;
+  overflow: hidden;
+}
+
 #openBtn::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent,
+    rgba(255,255,255,0.1),
+    transparent
+  );
+  transform: rotate(45deg);
+  animation: shine 3s infinite;
+}
+
+#shopBtn::before {
   content: '';
   position: absolute;
   top: -50%;
@@ -88,9 +685,22 @@ body {
   border-color: #b794f6;
 }
 
+#shopBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(243, 156, 18, 0.6),
+              inset 0 -3px 10px rgba(0,0,0,0.2);
+  border-color: #f39c12;
+}
+
 #openBtn:active {
   transform: translateY(0);
   box-shadow: 0 2px 10px rgba(102, 126, 234, 0.4),
+              inset 0 -3px 10px rgba(0,0,0,0.2);
+}
+
+#shopBtn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 10px rgba(243, 156, 18, 0.4),
               inset 0 -3px 10px rgba(0,0,0,0.2);
 }
 
@@ -193,6 +803,29 @@ body {
   padding: 20px;
   z-index: 5000; /* Über allen anderen Elementen */
   display: none;
+}
+
+.reset-btn {
+  display: block;
+  margin: 40px auto 20px;
+  padding: 12px 24px;
+  font-size: 16px;
+  background: rgba(200, 50, 50, 0.8);
+  color: white;
+  border: 2px solid rgba(255, 100, 100, 0.6);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.reset-btn:hover {
+  background: rgba(220, 70, 70, 0.9);
+  border-color: rgba(255, 120, 120, 0.8);
+  transform: scale(1.05);
+}
+
+.reset-btn:active {
+  transform: scale(0.95);
 }
 
 /* Stats Overlay */
@@ -433,7 +1066,7 @@ body {
 /* Badge für Anzahl wie oft ein Item gesammelt wurde */
 .item-count-badge {
   position: absolute;
-  bottom: 6px;
+  top: 6px;
   right: 6px;
   background: rgba(0,0,0,0.7);
   color: white;
@@ -444,6 +1077,53 @@ body {
 }
 
 /* custom tooltip removed */
+/* ======= Custom Loot Tooltip ======= */
+.loot-tooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  display: none;
+  background: rgba(15,15,15,0.98);
+  color: #f0f0f0;
+  border: 1px solid #444;
+  border-left: 4px solid var(--tip-accent, #888);
+  padding: 10px 12px;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  min-width: 180px;
+  max-width: 320px;
+}
+
+.loot-tooltip .tip-name {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.loot-tooltip .tip-rarity {
+  display: inline-block;
+  align-self: flex-start;
+  background: var(--tip-accent, #888);
+  color: #111;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin: 2px 0 8px 0;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+
+.loot-tooltip .tip-value {
+  font-weight: 600;
+  color: #f1c40f;
+  margin-bottom: 6px;
+}
+
+.loot-tooltip .tip-desc {
+  font-size: 12px;
+  color: #d0d0d0;
+  line-height: 1.4;
+}
 
 #closeCollectionBtn {
   position: absolute;
@@ -481,6 +1161,80 @@ body {
   background: rgba(255,255,255,0.08);
   border-color: #888;
   transform: scale(1.05);
+}
+
+/* Schlüssel-Button: kleine Raritäts-Badges im Button anzeigen */
+.key-badges {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.key-badge {
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.4);
+  color: #111;
+  background: rgba(255,255,255,0.2);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease, filter 0.12s ease, opacity 0.12s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  position: relative;
+}
+.key-badge:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.35), 0 0 12px var(--kb-glow, rgba(255,255,255,0.45)); }
+.key-Common { background: rgba(204, 204, 204, 0.7); }
+.key-Rare { background: rgba(74, 144, 226, 0.7); }
+.key-Epic { background: rgba(155, 89, 182, 0.7); }
+.key-Legendary { background: rgba(241, 196, 15, 0.8); }
+.key-Mythisch { background: rgba(231, 76, 60, 0.8); }
+
+.key-badge.disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  filter: grayscale(70%);
+}
+.key-badge.disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Bis zum ersten Fund: Schlüsselbild komplett schwarz anzeigen */
+.key-badge.unknown .kb-icon-wrap img {
+  filter: brightness(0);
+}
+
+/* Schlüsselbild + kleiner Counter in den Badges */
+.kb-icon-wrap {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border: 2px solid #777;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.kb-icon-wrap img { width: 16px; height: 16px; object-fit: contain; }
+.kb-count {
+  position: absolute;
+  bottom: -7px;
+  right: -7px;
+  background: #f1c40f;
+  color: #111;
+  border: 2px solid #7d5e00;
+  border-radius: 999px;
+  min-width: 14px;
+  padding: 0 4px;
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 14px;
+  text-align: center;
 }
 
 /* Box Selection Wrapper mit Icon-Buttons */
@@ -569,6 +1323,43 @@ body {
   justify-content: center;
 }
 
+#devToggleWrapper {
+  display: none; /* hide visible dev checkbox wrapper */
+}
+
+.toggle-dev {
+  user-select: none;
+  color: #bbb;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toggle-dev input[type="checkbox"] {
+  transform: scale(1.1);
+}
+
+/* Secret DEV switch in title */
+.secret-dev-switch {
+  display: inline-block;
+  position: relative;
+  line-height: 1;
+}
+.secret-dev-switch:focus {
+  outline: none;
+}
+.secret-dev-switch.dev-on::after {
+  content: '✔';
+  position: absolute;
+  right: -0.35em;
+  bottom: -0.25em;
+  font-size: 0.6em;
+  color: #2ecc71;
+  text-shadow: 0 0 4px rgba(46,204,113,0.8);
+  pointer-events: none;
+}
+
 #collectionBtn, #statsBtn {
   font-size: 24px;
   padding: 10px 15px;
@@ -584,6 +1375,25 @@ body {
 #collectionBtn:hover, #statsBtn:hover {
   background: rgba(255,255,255,0.08);
   border-color: #888;
+  transform: scale(1.05);
+}
+
+#devMoneyBtn {
+  font-size: 24px;
+  padding: 10px 15px;
+  cursor: pointer;
+  background: rgba(0,255,0,0.1);
+  border: 2px solid rgba(0,255,0,0.3);
+  color: #0f0;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  min-width: 50px;
+  font-weight: bold;
+}
+
+#devMoneyBtn:hover {
+  background: rgba(0,255,0,0.2);
+  border-color: rgba(0,255,0,0.5);
   transform: scale(1.05);
 }
 
@@ -635,21 +1445,66 @@ body {
 }
 
 .info-modal {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%,-50%);
-  background: rgba(10,10,10,0.98);
-  border: 1px solid #444;
-  padding: 16px;
-  color: white;
-  z-index: 5100;
-  min-width: 320px;
-  max-width: 90%;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.7);
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: rgba(0, 0, 0, 0.35) !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 5100 !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
-.info-content { position: relative; }
-.info-close { position: absolute; right: 8px; top: 8px; background: transparent; border: none; color: #aaa; font-size: 16px; cursor: pointer; }
+
+.info-modal[style*="display: block"],
+.info-modal[style*="display:block"] {
+  display: flex !important;
+}
+
+.info-content { 
+  position: relative !important;
+  background: rgba(10,10,10,0.98) !important;
+  border: 1px solid #444 !important;
+  padding: 20px !important;
+  color: white !important;
+  width: 500px !important;
+  max-width: 90vw !important;
+  max-height: 80vh !important;
+  overflow-y: auto !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.7) !important;
+  border-radius: 8px !important;
+}
+
+/* Make the keys modal a bit wider so icons and buttons fit nicely */
+#keysModal .info-content {
+  width: 820px !important;
+  max-width: 95vw !important;
+}
+
+.info-content h3 {
+  margin: 0 0 16px 0;
+  text-align: center;
+  font-size: 20px;
+}
+
+.info-close { 
+  position: absolute; 
+  right: 12px; 
+  top: 12px; 
+  background: transparent; 
+  border: none; 
+  color: #aaa; 
+  font-size: 20px; 
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px;
+}
+
+.info-close:hover {
+  color: #fff;
+}
 .info-header { margin-bottom: 8px; text-align: left; }
 .info-table { width: 100%; border-collapse: collapse; text-align: left; }
 .info-table th, .info-table td { padding: 6px 8px; border-bottom: 1px solid #222; }
@@ -772,6 +1627,47 @@ body {
   display: none;
 }
 
+/* Shop Modal Overlay: identisch aufgebaut wie Skill-Overlay */
+#shopModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  color: white;
+  overflow-y: auto;
+  padding: 0;
+  z-index: 5000;
+  display: none;
+}
+
+/* Shop Root-Container: Standard-Block, Sektionen stehen untereinander */
+/* (keine speziellen Layoutregeln nötig) */
+
+/* Shop Sections – angeordnet wie die Sammlung */
+.shop-section {
+  width: 100%;
+  margin-bottom: 24px;
+}
+.shop-section h3 {
+  font-size: 18px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #555;
+  padding-bottom: 5px;
+  text-align: left;
+  color: white;
+}
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  justify-items: stretch;
+}
+.shop-section .skill-branch {
+  text-align: left;
+}
+
 .skill-modal {
   background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
   padding: 30px;
@@ -863,9 +1759,23 @@ body {
   transition: all 0.3s ease;
 }
 
+/* Preis direkt im Button */
+.upgrade-btn .price {
+  margin-left: 8px;
+  color: #f1c40f; /* Gold/Geld-Farbe */
+}
+.upgrade-btn .price.unaffordable {
+  color: #e74c3c; /* Rot bei zu wenig Geld */
+}
+
 .upgrade-btn:hover:not(:disabled) {
   transform: scale(1.05);
   box-shadow: 0 5px 15px rgba(39, 174, 96, 0.5);
+}
+
+/* Stärkerer Glow für bezahlbare Buttons */
+.upgrade-btn.affordable:hover:not(:disabled) {
+  box-shadow: 0 0 16px rgba(39, 174, 96, 0.65), 0 0 32px rgba(39, 174, 96, 0.35);
 }
 
 .upgrade-btn:disabled {
@@ -923,5 +1833,208 @@ body {
 .level-up-skill {
   color: #2ecc71;
   font-weight: bold;
+}
+
+/* Money Earned Effect */
+.money-earned-effect {
+  position: fixed;
+  font-size: 32px;
+  font-weight: bold;
+  color: #2ecc71;
+  pointer-events: none;
+  z-index: 9999;
+  text-shadow: 0 0 10px rgba(46, 204, 113, 0.8),
+               0 0 20px rgba(46, 204, 113, 0.6);
+  animation: moneyRise 2s ease-out forwards;
+  transform: translateX(-50%);
+}
+
+@keyframes moneyRise {
+  0% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-100px);
+  }
+}
+
+/* Key Found Effect (gelb, ähnlich Kontostand-Animation) */
+.key-found-effect {
+  position: fixed;
+  font-size: 28px;
+  font-weight: bold;
+  color: #f1c40f;
+  pointer-events: none;
+  z-index: 9999;
+  text-shadow: 0 0 10px rgba(241, 196, 15, 0.9),
+               0 0 20px rgba(241, 196, 15, 0.7);
+  animation: moneyRise 2s ease-out forwards;
+  transform: translateX(-50%);
+}
+
+/* Glow-Animation für Schlüssel-Badge */
+@keyframes keyBadgeGlowPulse {
+  0% { box-shadow: 0 0 0 rgba(241,196,15,0); transform: scale(1.0); }
+  30% { box-shadow: 0 0 14px rgba(241,196,15,0.9), 0 0 26px rgba(241,196,15,0.5); transform: scale(1.08); }
+  100% { box-shadow: 0 0 0 rgba(241,196,15,0); transform: scale(1.0); }
+}
+.key-badge-glow {
+  animation: keyBadgeGlowPulse 900ms ease-out;
+}
+
+/* Schlüssel-Modal: Key → Door Layout */
+#keysModal .keys-row {
+  display: grid;
+  grid-template-columns: 200px 40px 1fr auto; /* Key | Arrow | Door | Actions */
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  min-height: 72px; /* a bit taller so icon + counter sit nicely */
+}
+#keysModal .key-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 200px; /* fixed to align arrow/door columns across rows */
+  overflow: hidden;
+}
+#keysModal .key-icon-wrap {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border: 2px solid #777;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.03);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+#keysModal .key-icon-wrap img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+#keysModal .key-counter-badge {
+  position: absolute;
+  bottom: -4px;
+  right: -6px;
+  background: #f1c40f;
+  color: #111;
+  border: 2px solid #7d5e00;
+  border-radius: 999px;
+  min-width: 20px;
+  padding: 2px 6px;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+}
+#keysModal .key-rarity-label { font-weight: 700; }
+#keysModal .arrow-cell {
+  font-size: 28px;
+  opacity: 0.9;
+  text-align: center;
+  width: 40px; /* matches grid column */
+}
+#keysModal .door-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 160px;
+}
+#keysModal .door-emoji {
+  font-size: 36px;
+  width: 36px;
+  flex: 0 0 36px; /* align emojis vertically */
+  text-align: center;
+}
+#keysModal .door-label { opacity: 0.9; }
+#keysModal .key-actions {
+  justify-self: end;
+  display: inline-flex;
+  gap: 8px;
+}
+#keysModal .key-actions .box-info-btn {
+  font-size: 16px;
+  padding: 6px 10px;
+  min-width: auto;
+}
+
+/* ======= Rarity Reveal Flare (Legendary & Mythisch) ======= */
+#lootContainer .item .rarity-flare {
+  position: absolute;
+  inset: -6px;
+  border-radius: 10px;
+  pointer-events: none;
+  z-index: 2053;
+  overflow: hidden;
+}
+
+@keyframes ringPulse {
+  0% { transform: scale(0.85); opacity: 0.0; }
+  20% { opacity: 0.9; }
+  60% { transform: scale(1.1); opacity: 0.7; }
+  100% { transform: scale(1.0); opacity: 0.0; }
+}
+
+@keyframes diagonalShine {
+  0% { transform: translateX(-120%) translateY(-120%) rotate(25deg); opacity: 0; }
+  20% { opacity: 0.6; }
+  100% { transform: translateX(120%) translateY(120%) rotate(25deg); opacity: 0; }
+}
+
+#lootContainer .item .legendary-flare::before,
+#lootContainer .item .mythic-flare::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 12px rgba(255,255,255,0.35), 0 0 24px rgba(255,255,255,0.25);
+  animation: ringPulse 1.2s ease-out forwards;
+}
+
+#lootContainer .item .legendary-flare::after,
+#lootContainer .item .mythic-flare::after {
+  content: '';
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  background: linear-gradient(25deg, transparent 40%, rgba(255,255,255,0.75) 50%, transparent 60%);
+  animation: diagonalShine 0.9s ease-out forwards;
+}
+
+#lootContainer .item .legendary-flare {
+  background: radial-gradient(ellipse at center, rgba(241,196,15,0.25) 0%, rgba(241,196,15,0.05) 60%, transparent 80%);
+  border: 2px solid rgba(241,196,15,0.6);
+  box-shadow: 0 0 30px rgba(241,196,15,0.35);
+}
+
+#lootContainer .item .mythic-flare {
+  background: radial-gradient(ellipse at center, rgba(231,76,60,0.25) 0%, rgba(231,76,60,0.05) 60%, transparent 80%);
+  border: 2px solid rgba(231,76,60,0.6);
+  box-shadow: 0 0 34px rgba(231,76,60,0.38);
+}
+
+/* Dramatic screen vignette for Mythisch */
+.screen-vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10001;
+  background: radial-gradient(circle at center, rgba(0,0,0,0) 0%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0.45) 100%);
+  animation: vignetteFade 0.9s ease-out forwards;
+}
+
+@keyframes vignetteFade {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
