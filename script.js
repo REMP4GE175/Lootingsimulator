@@ -717,10 +717,11 @@ function applyLuckBonus(weights, boxType) {
 
   const modifiedWeights = { ...weights };
 
-  // Pro-Punkt-Raten (halbiert): konservativ gekappt
-  const crRate = Math.min(0.01 * g, 0.10);    // bis zu 10% von Common -> Rare
-  const reRate = Math.min(0.0075 * g, 0.075); // bis zu 7,5% von Rare  -> Epic
-  const elRate = Math.min(0.005 * g, 0.05);   // bis zu 5% von Epic    -> Legendary
+  // Pro-Punkt-Raten: keine harten Caps mehr, damit Glück unbegrenzt skaliert
+  // Die prozentuale Verschiebung sorgt von selbst für abnehmende Zuwächse
+  const crRate = 0.01 * g;    // 1% von Common -> Rare pro Glück-Punkt
+  const reRate = 0.0075 * g;  // 0,75% von Rare -> Epic pro Glück-Punkt
+  const elRate = 0.005 * g;   // 0,5% von Epic -> Legendary pro Glück-Punkt
   
   // Legendary -> Mythisch: Box-spezifische Logik
   let lmRate = 0;
@@ -729,14 +730,11 @@ function applyLuckBonus(weights, boxType) {
     // Box 1: KEINE Mythisch-Verschiebung erlaubt
     lmRate = 0;
   } else if (boxType === 'Box#2') {
-    // Box 2: weiter leicht reduziert – Ziel: sehr geringe Mythisch-Zuwächse trotz Glück
-    // Vorher: min(0.000125*g, 0.00125) → Jetzt ~20% geringer
-    lmRate = Math.min(0.0001 * g, 0.001);
+    // Box 2: sehr geringe Mythisch-Zuwächse
+    lmRate = 0.0001 * g; // 0,01% von Legendary -> Mythisch pro Glück-Punkt
   } else {
-    // Box 3-7: insgesamt ~20% weniger als zuvor
-    // Vorher: min(0.0025*g, 0.03) * 0.5  (max ~1,5% von Leg. → Mythisch)
-    // Jetzt:  min(0.0025*g, 0.03) * 0.4  (max ~1,2% von Leg. → Mythisch)
-    lmRate = Math.min(0.0025 * g, 0.03) * 0.4;
+    // Box 3-7: moderater Zuwachs
+    lmRate = 0.0025 * g * 0.4; // 0,1% von Legendary -> Mythisch pro Glück-Punkt
   }
 
   // Common -> Rare
