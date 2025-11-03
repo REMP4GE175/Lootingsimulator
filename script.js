@@ -2036,6 +2036,9 @@ dom.openBtn.addEventListener('click', async () => {
   dom.openBtn.style.opacity = '0.5';
   // Box-Auswahl temporär deaktivieren
   setBoxSelectionEnabled(false);
+  // Tracke, ob für diese Öffnung bereits ein Schlüssel verbraucht wurde,
+  // um doppelten Verbrauch (Vormerkung + Auto-Verbrauch im KeyRoom) zu vermeiden
+  let __consumedKeyThisOpen = false;
 
   // Prüfe ob ein Schlüssel-Vormerkung aktiv ist und bereite kostenfreie Öffnung vor
   if (pendingKeyOpen) {
@@ -2052,6 +2055,7 @@ dom.openBtn.addEventListener('click', async () => {
         saveProgress();
         renderKeysButtonBadges();
         __nextOpenIsFree = true; // nächste Öffnung ist kostenlos
+        __consumedKeyThisOpen = true; // Merken, dass bereits ein Schlüssel genutzt wurde
       }
     } finally {
       // Inline-Icon aktualisieren und Vormerkung zurücksetzen – unabhängig vom Ergebnis
@@ -2062,7 +2066,8 @@ dom.openBtn.addEventListener('click', async () => {
 
   // Falls keine Vormerkung aktiv ist, aber wir uns in einem KeyRoom befinden:
   // versuche automatisch einen passenden Schlüssel zu verbrauchen, oder breche mit Meldung ab.
-  if (!pendingKeyOpen) {
+  // Nur automatisch konsumieren, wenn bisher kein Schlüssel für diese Öffnung genutzt wurde
+  if (!__consumedKeyThisOpen) {
     const autoRarity = getRarityForKeyRoom(boxType);
     if (autoRarity) {
       if ((keysInventory[autoRarity] || 0) > 0) {
@@ -2072,6 +2077,7 @@ dom.openBtn.addEventListener('click', async () => {
         __nextOpenIsFree = true; // Öffnung im Raum ist durch Schlüssel "autorisiert"
         // Icon nach Verbrauch aktualisieren (bleibt Schlüssel, wenn weitere vorhanden sind)
         updateOpenBtnIcon();
+        __consumedKeyThisOpen = true;
       } else {
         alert(`Keine Schlüssel mehr für ${displayRarityName(autoRarity)}!`);
         // UI zurücksetzen und Öffnung abbrechen
