@@ -62,391 +62,6 @@ body {
   flex-shrink: 0;
 }
 
-/* Right-side animation area */
-#searchAnim {
-  position: relative;
-  width: 220px; /* mehr Platz, damit die Kiste rechts neben der Figur passt */
-  height: 200px;
-  --ground-h: 26px; /* Basis-Höhe des Grasbodens */
-  transform: scale(0.7); /* 30% kleiner */
-  transform-origin: bottom center;
-  flex-shrink: 0; /* verhindert Schrumpfen bei kleinem Viewport */
-  display: none; /* Komplette Animation ausblenden */
-}
-
-/* Grass ground for the character to stand on */
-#searchAnim .ground {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: var(--ground-h);
-  background: linear-gradient(180deg, #6ad05a 0%, #41a749 70%, #317d37 100%);
-  border: 2px solid #000;
-  border-bottom: 0;
-  border-radius: 10px 10px 0 0;
-  box-shadow: inset 0 3px 0 rgba(255,255,255,0.12);
-  z-index: 1;
-}
-
-#searchAnim .ground::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at 20% 40%, rgba(255,255,255,0.15) 0 6px, transparent 7px),
-    radial-gradient(ellipse at 60% 35%, rgba(255,255,255,0.12) 0 5px, transparent 6px),
-    radial-gradient(ellipse at 85% 45%, rgba(255,255,255,0.1) 0 4px, transparent 5px);
-  pointer-events: none;
-}
-
-#searchAnim .ground::after {
-  content: '';
-  position: absolute;
-  left: 4px;
-  right: 4px;
-  bottom: -6px;
-  height: 8px;
-  background: linear-gradient(180deg, #6b4423, #3a2412);
-  border: 2px solid #000;
-  border-top: 0;
-  border-radius: 0 0 8px 8px;
-}
-
-#searchAnim .character {
-  position: absolute;
-  bottom: var(--ground-h); /* Füße stehen oben auf dem Gras */
-  left: 20px;
-  width: 80px;
-  height: 140px;
-  transform-origin: bottom center;
-  transition: none; /* Sofortiger Wechsel zwischen Idle und Suchen in beide Richtungen */
-  z-index: 3;
-  display: none; /* Figur komplett ausblenden */
-}
-
-/* Idle subtle bob */
-@keyframes idleBob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
-}
-
-/* Idle: nur Oberkörper wackelt, Füße bleiben fest auf dem Boden */
-@keyframes bobSway {
-  0%, 100% { transform: rotate(0deg); }
-  50% { transform: rotate(-2.2deg); }
-}
-
-/* nicht die ganze Figur animieren, nur Body+Head */
-#searchAnim .character.idle .body {
-  animation: bobSway 2.2s ease-in-out infinite;
-}
-#searchAnim .character.idle .head {
-  animation: bobSway 2.2s ease-in-out infinite;
-}
-
-/* Character parts */
-#searchAnim .head {
-  position: absolute;
-  top: 0;
-  left: 20px;
-  width: 38px;
-  height: 38px;
-  background: radial-gradient(circle at 35% 35%, #ffd99f, #f2bd78);
-  border-radius: 50%;
-  border: 2px solid #000;
-  box-shadow: 0 2px 0 rgba(0,0,0,0.15);
-  transform-origin: bottom center;
-  z-index: 3; /* head above torso */
-}
-
-/* Cartoon eyes and mouth */
-#searchAnim .head::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 10px;
-  height: 12px;
-  background:
-    radial-gradient(circle at 12px 6px, #000 0 3px, transparent 4px),
-    radial-gradient(circle at 26px 6px, #000 0 3px, transparent 4px);
-  opacity: 0.95;
-}
-#searchAnim .head::after {
-  content: '';
-  position: absolute;
-  top: 22px;
-  left: 50%;
-  width: 14px;
-  height: 9px;
-  border: 2px solid #000;
-  border-top: none;
-  border-radius: 0 0 14px 14px;
-  transform: translateX(-50%);
-}
-
-#searchAnim .body {
-  position: absolute;
-  top: 30px;
-  left: 17px;
-  width: 44px;
-  height: 64px;
-  background: linear-gradient(180deg, #5aa2ff, #2f6fe0);
-  border-radius: 10px;
-  border: 2px solid #000;
-  box-shadow: 0 3px 0 rgba(0,0,0,0.15);
-  transform-origin: bottom center; /* wackeln/kippen um die Hüfte */
-  z-index: 2;
-}
-
-#searchAnim .arm {
-  position: absolute;
-  top: 38px;
-  width: 10px;
-  height: 50px;
-  background: linear-gradient(180deg, #5aa2ff, #2f6fe0);
-  border-radius: 6px;
-  border: 2px solid #000;
-  transform-origin: top center;
-  z-index: 3; /* arms above torso */
-}
-#searchAnim .arm.left { left: 6px; }
-#searchAnim .arm.right { right: 6px; }
-
-#searchAnim .leg {
-  position: absolute;
-  bottom: 0;
-  width: 12px;
-  height: 44px;
-  background: #222;
-  border-radius: 4px;
-  border: 2px solid #000;
-  transform-origin: top center;
-}
-#searchAnim .leg.left { left: 24px; }
-#searchAnim .leg.right { left: 42px; }
-
-/* Chest */
-#searchAnim .chest {
-  position: absolute;
-  bottom: var(--ground-h); /* Kiste steht auf dem Gras */
-  left: 120px; /* rechts neben der Figur */
-  width: 100px;
-  height: 78px;
-  pointer-events: none;
-  opacity: 1; /* dauerhaft sichtbar */
-  transform: translateY(0) scale(1);
-  transition: opacity 0.35s ease, transform 0.35s ease;
-  z-index: 2;
-}
-
-#searchAnim .chest-body {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 60px;
-  background: linear-gradient(180deg, #b37436, #6b4423);
-  border: 3px solid #000;
-  border-radius: 8px 8px 10px 10px;
-  box-shadow: inset 0 6px 0 rgba(0,0,0,0.12), 0 6px 10px rgba(0,0,0,0.35);
-}
-
-#searchAnim .chest-lid {
-  position: absolute;
-  bottom: 54px;
-  left: 0px;            /* bündig mit der Kistenbreite */
-  width: 100px;         /* Deckel so lang wie die Kiste */
-  height: 28px;
-  background: linear-gradient(180deg, #d2863e, #8b5a2b);
-  border: 3px solid #000;
-  border-radius: 12px 12px 4px 4px;
-  transform-origin: right bottom; /* Deckel klappt nach rechts auf */
-  transform: rotate(0deg); /* im Idle gerade aufliegend */
-  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-}
-
-/* ====== Cartoon-Rummage Particles (Subtil) ====== */
-.rummage-particle {
-  position: absolute;
-  pointer-events: none;
-  z-index: 5000; /* über Beinen und Kiste */
-  opacity: 0.9;
-  transform: translate(0, 0) scale(0.8) rotate(0deg);
-  animation: particlePop 1000ms ease-out forwards;
-  font-size: 16px;
-  line-height: 1;
-  text-align: center;
-  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3));
-}
-
-/* Schwarze Staub-Punkte */
-.rummage-particle.dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #333;
-  border: 1px solid #000;
-}
-
-/* Feder (emoji oder kleiner text) */
-.rummage-particle.feather::before {
-  content: '🪶';
-  font-size: 14px;
-}
-
-/* Zahnrad */
-.rummage-particle.gear::before {
-  content: '⚙️';
-  font-size: 12px;
-  opacity: 0.8;
-}
-
-@keyframes particlePop {
-  0% {
-    opacity: 0.0;
-    transform: translate(0, 0) scale(0.5) rotate(0deg);
-  }
-  10% {
-    opacity: 1;
-    transform: translate(0, 0) scale(1.0) rotate(0deg);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(var(--dx, 0px), var(--dy, -40px)) scale(0.9) rotate(var(--rot, 0deg));
-  }
-}
-
-/* Box-Themes: passen die Kistenoptik je gewählter Box an */
-#searchAnim.theme-box-1 .chest-body { background: linear-gradient(180deg, #b37436, #6b4423); }
-#searchAnim.theme-box-1 .chest-lid  { background: linear-gradient(180deg, #d2863e, #8b5a2b); }
-
-#searchAnim.theme-box-2 .chest-body { background: linear-gradient(180deg, #4a6ea9, #2e4572); }
-#searchAnim.theme-box-2 .chest-lid  { background: linear-gradient(180deg, #6a8fd1, #3e5f9f); }
-
-#searchAnim.theme-box-3 .chest-body { background: linear-gradient(180deg, #bfc6cf, #7c8794); }
-#searchAnim.theme-box-3 .chest-lid  { background: linear-gradient(180deg, #e0e6ee, #9aa6b5); }
-
-#searchAnim.theme-box-4 .chest-body { background: linear-gradient(180deg, #d4a017, #8a6b0a); }
-#searchAnim.theme-box-4 .chest-lid  { background: linear-gradient(180deg, #ffd75a, #c79b1f); }
-
-#searchAnim.theme-box-5 .chest-body { background: linear-gradient(180deg, #557a47, #2f4a28); }
-#searchAnim.theme-box-5 .chest-lid  { background: linear-gradient(180deg, #76a066, #3f6a3a); }
-
-#searchAnim.theme-box-6 .chest-body { background: linear-gradient(180deg, #6d6d6d, #3b3b3b); }
-#searchAnim.theme-box-6 .chest-lid  { background: linear-gradient(180deg, #9a9a9a, #5a5a5a); }
-
-#searchAnim.theme-box-7 .chest-body { background: linear-gradient(180deg, #b8328c, #7a205d); }
-#searchAnim.theme-box-7 .chest-lid  { background: linear-gradient(180deg, #ff4fb6, #b8328c); }
-
-#searchAnim.theme-testbox .chest-body { background: linear-gradient(180deg, #2aa198, #145c59); }
-#searchAnim.theme-testbox .chest-lid  { background: linear-gradient(180deg, #3fd1c6, #1e7d78); }
-
-/* Searching state: show chest and dip character into it */
-#searchAnim.searching .chest {
-  opacity: 1; /* unverändert, nur der Deckel animiert */
-}
-
-/* Emoji-Icon für die Kiste (Box-Icons) */
-#searchAnim .chest-emoji {
-  position: absolute;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 32px;
-  filter: drop-shadow(0 1px 0 rgba(0,0,0,0.4));
-  pointer-events: none;
-  z-index: 3;
-}
-
-#searchAnim.searching .character {
-  /* Charakter in Richtung Kiste verschieben und leicht anheben,
-     damit die Beine oberhalb der Kistenöffnung sichtbar sind */
-  transform: translate(88px, -20px);
-  transition: none;
-  z-index: 2; /* beim Wühlen liegt die Kiste darüber, um das Eintauchen zu verdecken */
-}
-
-#searchAnim.searching .character .body,
-#searchAnim.searching .character .head {
-  /* Übergangsanimation (Eintauchen) komplett streichen */
-  animation: none !important;
-  transform: none !important;
-}
-
-@keyframes bodyDip {
-  to { transform: rotate(55deg) translate(14px, 12px); }
-}
-
-@keyframes headDip {
-  to { transform: rotate(42deg) translate(18px, 10px); }
-}
-
-/* Rummage: arms wiggle alternately while searching */
-@keyframes rummageLeft {
-  0% { transform: rotate(-20deg); }
-  50% { transform: rotate(-55deg) translateY(-2px); }
-  100% { transform: rotate(-20deg); }
-}
-@keyframes rummageRight {
-  0% { transform: rotate(20deg); }
-  50% { transform: rotate(55deg) translateY(-2px); }
-  100% { transform: rotate(20deg); }
-}
-
-#searchAnim.searching .arm.left { animation: rummageLeft 0.5s ease-in-out infinite; }
-#searchAnim.searching .arm.right { animation: rummageRight 0.5s ease-in-out infinite; }
-
-/* Beine wackeln sichtbar aus der Kiste heraus (um 180° gedreht) */
-@keyframes legWiggleLeft {
-  0% { transform: rotate(170deg); }
-  50% { transform: rotate(200deg); }
-  100% { transform: rotate(170deg); }
-}
-@keyframes legWiggleRight {
-  0% { transform: rotate(190deg); }
-  50% { transform: rotate(160deg); }
-  100% { transform: rotate(190deg); }
-}
-
-/* Basisrotation für den Start des Suchens; Animation übersteuert diese bei Bedarf */
-#searchAnim.searching .leg { transform: rotate(180deg); }
-#searchAnim.searching .leg.left { animation: legWiggleLeft 0.6s ease-in-out infinite; }
-#searchAnim.searching .leg.right { animation: legWiggleRight 0.6s ease-in-out infinite; }
-
-/* Lid subtle wobble while searching for extra cartoon feel */
-@keyframes lidWobble {
-  0% { transform: rotate(110deg); }
-  50% { transform: rotate(100deg); }
-  100% { transform: rotate(110deg); }
-}
-
-@keyframes lidOpen {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(110deg); }
-}
-
-/* Während des Suchens Deckel komplett öffnen und leicht wackeln */
-#searchAnim.searching .chest {
-  z-index: 4; /* liegt über der Figur und verdeckt den Oberkörper */
-}
-
-#searchAnim.searching .chest-lid {
-  animation: lidOpen 0.28s ease-out forwards,
-             lidWobble 0.6s ease-in-out 0.28s infinite;
-}
-
-/* Beim Suchen: Oberkörper verschwindet in der Kiste, Beine bleiben sichtbar */
-#searchAnim.searching .character .head,
-#searchAnim.searching .character .body,
-#searchAnim.searching .character .arm {
-  z-index: 1; /* unter der Kiste */
-  opacity: 0; /* vollständig unsichtbar während des Suchens */
-}
-#searchAnim.searching .chest { z-index: 3; }
-#searchAnim.searching .leg { z-index: 4; } /* Beine über der Kiste sichtbar */
-
 #openBtn {
   transition: all 0.3s ease;
   cursor: pointer;
@@ -639,44 +254,7 @@ body {
   overflow: hidden;
 }
 
-#openBtn::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    45deg,
-    transparent,
-    rgba(255,255,255,0.1),
-    transparent
-  );
-  transform: rotate(45deg);
-  animation: shine 3s infinite;
-}
-
-#shopBtn::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    45deg,
-    transparent,
-    rgba(255,255,255,0.1),
-    transparent
-  );
-  transform: rotate(45deg);
-  animation: shine 3s infinite;
-}
-
-@keyframes shine {
-  0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
-  100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
-}
+/* Shine-Effekt auf Buttons entfernt (Performance) */
 
 #openBtn:hover {
   transform: translateY(-2px);
@@ -2036,5 +1614,45 @@ body {
   0% { opacity: 0; }
   20% { opacity: 1; }
   100% { opacity: 0; }
+}
+
+/* Update-Info Banner (neue Version verfügbar) */
+#updateBanner {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 3000;
+  background: rgba(20, 20, 20, 0.96);
+  color: #fff;
+  border: 1px solid #444;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04) inset;
+  padding: 10px 12px;
+  display: none;
+}
+
+#updateBanner .ub-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#updateBanner .ub-text {
+  font-size: 14px;
+}
+
+#updateBanner .ub-reload {
+  background: #2ecc71;
+  border: 1px solid #27ae60;
+  color: #0b1d0f;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+#updateBanner .ub-reload:hover {
+  background: #31d778;
 }
 

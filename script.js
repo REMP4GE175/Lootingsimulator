@@ -1143,123 +1143,12 @@ function renderQuickslots() {
   }
 }
 
-// Suche-Animation (Männchen + Kiste)
-const searchAnimEl = document.getElementById('searchAnim');
-let __rummageInterval = null;
-
-function createRummageParticle() {
-  if (!searchAnimEl) return;
-  const rootRect = searchAnimEl.getBoundingClientRect();
-  const chest = searchAnimEl.querySelector('.chest');
-  const chestBody = searchAnimEl.querySelector('.chest-body');
-  if (!chest || !chestBody) return;
-  const chestRect = chestBody.getBoundingClientRect();
-
-  // Ursprung: zufällig über die gesamte Kistenfläche verteilt
-  const originX = chestRect.left - rootRect.left + Math.random() * chestRect.width;
-  const originY = chestRect.top - rootRect.top + Math.random() * chestRect.height;
-
-  const p = document.createElement('div');
-  p.className = 'rummage-particle';
-
-  // Varianten: meistens Staub-Punkte, gelegentlich Feder oder Zahnrad
-  const rand = Math.random();
-  if (rand < 0.7) {
-    p.classList.add('dot'); // 70% schwarze Punkte
-  } else if (rand < 0.85) {
-    p.classList.add('feather'); // 15% Feder
-  } else {
-    p.classList.add('gear'); // 15% Zahnrad
-  }
-
-  // Zufällige Richtung: nur nach oben und zur Seite (90° bis 270°, mit Schwerpunkt oben)
-  // Verhindere, dass Partikel nach unten fliegen
-  const angle = (Math.PI * 0.5) + (Math.random() * Math.PI); // 90° bis 270° (nach oben)
-  const distance = 40 + Math.random() * 50; // 40-90px Flugweite
-  const dx = Math.cos(angle) * distance;
-  const dy = Math.sin(angle) * distance; // wird negativ sein (nach oben)
-  const rot = (Math.random() * 100 - 50); // -50..50 deg
-  
-  p.style.setProperty('--dx', dx.toFixed(1) + 'px');
-  p.style.setProperty('--dy', dy.toFixed(1) + 'px');
-  p.style.setProperty('--rot', rot.toFixed(1) + 'deg');
-
-  // Position relativ zu #searchAnim
-  p.style.left = originX + 'px';
-  p.style.top = originY + 'px';
-
-  // Lebensdauer: nach Animationsende entfernen
-  p.addEventListener('animationend', () => {
-    if (p.parentElement) p.parentElement.removeChild(p);
-  });
-
-  searchAnimEl.appendChild(p);
-}
-
-function startRummageParticles() {
-  // Sicherstellen, dass kein zweites Intervall läuft
-  stopRummageParticles();
-  __rummageInterval = setInterval(() => {
-    // Pro Tick nur 1 Partikel (statt 2-3)
-    createRummageParticle();
-  }, 250); // längeres Intervall für weniger Partikel
-}
-
-function stopRummageParticles() {
-  if (__rummageInterval) {
-    clearInterval(__rummageInterval);
-    __rummageInterval = null;
-  }
-}
-
-function setSearchingState(active) {
-  try {
-    if (!searchAnimEl) return;
-    searchAnimEl.classList.toggle('searching', !!active);
-    const char = searchAnimEl.querySelector('.character');
-    if (char) {
-      if (active) {
-        char.classList.remove('idle');
-        startRummageParticles();
-      } else {
-        // Sofort zurück in Idle ohne Verzögerung und Partikel stoppen
-        stopRummageParticles();
-        char.classList.add('idle');
-        // Restpartikel verschwinden automatisch nach animationend
-      }
-    }
-  } catch (_) { /* ignore */ }
-}
-
-// Passt die Optik der Kiste an die gewählte Box an (über Theme-Klasse auf #searchAnim)
-function updateChestTheme(forBoxType) {
-  if (!searchAnimEl) return;
-  const root = searchAnimEl;
-  // entferne alte theme- Klassen
-  for (const c of Array.from(root.classList)) {
-    if (c.startsWith('theme-')) root.classList.remove(c);
-  }
-  const token = String(forBoxType || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-');
-  if (token) root.classList.add(`theme-${token}`);
-
-  // Emoji-Icon entsprechend der aktuellen Box setzen
-  try {
-    const chest = root.querySelector('.chest');
-    if (chest) {
-      let emojiEl = chest.querySelector('.chest-emoji');
-      if (!emojiEl) {
-        emojiEl = document.createElement('div');
-        emojiEl.className = 'chest-emoji';
-        emojiEl.setAttribute('aria-hidden', 'true');
-        chest.appendChild(emojiEl);
-      }
-      const icon = (typeof getBoxIcon === 'function') ? (getBoxIcon(forBoxType) || '📦') : '📦';
-      emojiEl.textContent = icon;
-    }
-  } catch (_) { /* ignore */ }
-}
+// Suche-Animation entfernt – Stubs für Kompatibilität
+function setSearchingState(active) { /* no-op */ }
+function updateChestTheme(forBoxType) { /* no-op */ }
+function createRummageParticle() { /* no-op */ }
+function startRummageParticles() { /* no-op */ }
+function stopRummageParticles() { /* no-op */ }
 
 // DEV toggle elements (not part of dom object to avoid breaking assumptions elsewhere)
 const devMoneyBtn = document.getElementById('devMoneyBtn');
@@ -3475,4 +3364,85 @@ dom.upgradeEffizienz.addEventListener('click', () => {
 
 // Initial UI Update
 updateLevelUI();
+
+// ======= App-Version laden und anzeigen + Update-Checker =======
+(function setupVersioning() {
+  const VERSION_URL = 'version.json';
+  const POLL_MS = 90000; // 90s
+  let currentVersion = null;
+  let bannerShownFor = null;
+
+  function setVersionBadge(ver) {
+    try {
+      const el = document.querySelector('.app-version-inline');
+      if (el && ver) {
+        el.textContent = 'v' + ver;
+        el.setAttribute('aria-label', 'Version ' + ver);
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  async function fetchVersionNoStore() {
+    try {
+      const res = await fetch(VERSION_URL, { cache: 'no-store' });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data && (data.version || data.appVersion || data.v)) || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function ensureUpdateBanner(newVer) {
+    if (bannerShownFor && bannerShownFor === newVer) return; // schon gezeigt
+    let banner = document.getElementById('updateBanner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'updateBanner';
+      banner.innerHTML = `
+        <div class="ub-inner">
+          <span class="ub-text">Neue Version verfügbar</span>
+          <button class="ub-reload" type="button" aria-label="Neu laden">Neu laden</button>
+        </div>`;
+      document.body.appendChild(banner);
+      const btn = banner.querySelector('.ub-reload');
+      if (btn) btn.addEventListener('click', () => {
+        // Einfacher Reload – Loader hängt ?v=<version> an und lädt frisch
+        location.reload();
+      });
+    }
+    const text = banner.querySelector('.ub-text');
+    if (text && newVer) text.textContent = `Neue Version v${newVer} verfügbar`;
+    banner.style.display = 'block';
+    bannerShownFor = newVer || 'unknown';
+  }
+
+  async function init() {
+    const ver = await fetchVersionNoStore();
+    if (ver) {
+      currentVersion = ver;
+      try { window.__appVersion = ver; } catch (_) {}
+      setVersionBadge(ver);
+    }
+    // Poll auf neue Version
+    setInterval(async () => {
+      const latest = await fetchVersionNoStore();
+      if (!latest) return;
+      if (!currentVersion) {
+        currentVersion = latest;
+        setVersionBadge(latest);
+        return;
+      }
+      if (latest !== currentVersion) {
+        ensureUpdateBanner(latest);
+      }
+    }, POLL_MS);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
 
