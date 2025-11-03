@@ -2196,6 +2196,23 @@ dom.openBtn.addEventListener('click', async () => {
     revealSlots[i].isNew = isNew;
   }
 
+  // Preload aller Item-Bilder bevor die Reveal-Animation startet
+  const preloadPromises = revealSlots.map(({ pulledItem }) => {
+    return new Promise((resolve) => {
+      const iconPath = getItemImagePath(pulledItem.icon || '', pulledItem.rarity || 'Common');
+      const img = new Image();
+      img.onload = () => resolve();
+      img.onerror = () => resolve(); // Auch bei Fehler weitermachen
+      img.src = iconPath;
+    });
+  });
+  
+  // Warte bis alle Bilder geladen sind (oder Timeout nach 2 Sekunden)
+  await Promise.race([
+    Promise.all(preloadPromises),
+    sleep(2000) // Max. 2 Sekunden warten
+  ]);
+
   // Reveal-Animation: nacheinander aufdecken
   for (let i = 0; i < revealSlots.length; i++) {
     const { slot, item, pulledItem } = revealSlots[i];
