@@ -334,7 +334,7 @@ function getCurrentTitle() {
 const itemPools = {
   Common: [
     // Schlüssel (Common) – sehr selten innerhalb der Common-Rarität
-    { name: "Schlüssel: Gewöhnlich", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen gewöhnlichen Raum mit Common-lastigen Loot.", isKey: true, dropWeight: 0.12 },
+    { name: "Schlüssel: Gewöhnlich", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen gewöhnlichen Raum mit Common-lastigen Loot.", isKey: true, dropWeight: 0.75 },
     { name: "Rostige Münze", icon: "Itembilder/Common/rusty coin.png", value: 15, description: "Ein alter, wertloser Münzfund." },
     { name: "Holzbrett", icon: "Itembilder/Common/Holzbrett.png", value: 20, description: "Nicht mal als Waffe zu gebrauchen." },
     { name: "Taschentuch", icon: "Itembilder/Common/Taschentuch.png", value: 18, description: "Ein gebrauchtes Stück Stoff." },
@@ -343,7 +343,7 @@ const itemPools = {
     { name: "Fischgräte", icon: "Itembilder/Common/Gräte.png", value: 30, description: "Überreste einer längst verzehrten Mahlzeit." },
     { name: "Eichel", icon: "Itembilder/Common/Eichel.png", value: 28, description: "Eine Frucht vom Eichenbaum." },
     { name: "Göffel", icon: "Itembilder/Common/Göffel.png", value: 35, description: "Eine Mischung aus Gabel und Löffel." },
-    { name: "Leere Karte", icon: "Itembilder/Common/Leere Karte.png", value: 32, description: "Ein unbeschriebenes Kartenblatt." },
+    { name: "Leere Karte", icon: "Itembilder/Common/LeereKarte.png", value: 32, description: "Ein unbeschriebenes Kartenblatt." },
     { name: "Kaputte Brille", icon: "Itembilder/Common/kaputte Brille.png", value: 24, description: "Eine kaputte Brille ohne Gläser." },
     { name: "Knopf", icon: "Itembilder/Common/Knopf.png", value: 16, description: "Ein einzelner Knopf von einem Hemd." },
     { name: "Korken", icon: "Itembilder/Common/Korken.png", value: 19, description: "Ein alter Flaschenkorken." },
@@ -377,7 +377,7 @@ const itemPools = {
   ],
   Rare: [
     // Schlüssel (Rare) – seltener als Common-Schlüssel
-    { name: "Schlüssel: Selten", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen seltenen Raum mit Rare-lastigen Loot.", isKey: true, dropWeight: 0.04 },
+    { name: "Schlüssel: Selten", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen seltenen Raum mit Rare-lastigen Loot.", isKey: true, dropWeight: 0.6 },
     { name: "Silber Ring", icon: "Itembilder/Selten/Silber Ring.png", value: 120, description: "Ein hübscher Ring mit leichtem Glanz." },
     { name: "Schatzkarte", icon: "Itembilder/Selten/Map.png", value: 250, description: "Zeigt vergessene Wege." },
   { name: "Schachtel Zigaretten", icon: "Itembilder/Selten/zigaretten.png", value: 180, description: "\"Mit dem Rauchen aufzuhören ist kinderleicht. Ich habe es schon hundert Mal gemacht.\"", quoteAuthor: "Mark Twain" },
@@ -411,7 +411,7 @@ const itemPools = {
   ],
   Epic: [
     // Schlüssel (Epic)
-    { name: "Schlüssel: Episch", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen epischen Raum mit Epic-lastigen Loot.", isKey: true, dropWeight: 0.03 },
+    { name: "Schlüssel: Episch", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen epischen Raum mit Epic-lastigen Loot.", isKey: true, dropWeight: 0.45 },
     { name: "Verzauberte Schriftrolle", icon: "Itembilder/Episch/Scroll.png", value: 600, description: "Ein Zauber, der nur einmal wirkt." },
     { name: "Phönixfeder", icon: "Itembilder/Episch/Phoenix Feder.png", value: 1200, description: "Glüht leicht in deiner Hand." },
     { name: "Vinyl-Schallplatte", icon: "Itembilder/Episch/Vinyl.png", value: 800, description: "Ein Medium aus vergangenen Tagen." },
@@ -443,7 +443,7 @@ const itemPools = {
   ],
   Legendary: [
     // Schlüssel (Legendary) – sehr selten
-    { name: "Schlüssel: Legendär", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen legendären Raum mit Legendary-lastigen Loot.", isKey: true, dropWeight: 0.015 },
+    { name: "Schlüssel: Legendär", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen legendären Raum mit Legendary-lastigen Loot.", isKey: true, dropWeight: 0.3 },
     { name: "Drachenschuppe", icon: "Itembilder/Legendär/dragon_scale.png", value: 6000, description: "Unzerstörbar und selten." },
     { name: "Himmelsorb", icon: "Itembilder/Legendär/orb.png", value: 12000, description: "Ein Relikt aus einer anderen Welt." },
     { name: "Goldblock", icon: "Itembilder/Legendär/goldblock.png", value: 8000, description: "Ein massiver Block aus reinem Gold." },
@@ -462,7 +462,7 @@ const itemPools = {
   ],
   Mythisch: [
     // Schlüssel (Mythisch) – extrem selten
-    { name: "Schlüssel: Mythisch", icon: "Itembilder/Mythisch/Schlüssel Mythisch.png", value: 0, description: "Öffnet einen mythischen Raum mit hochwertigem Loot.", isKey: true, dropWeight: 0.007 },
+    { name: "Schlüssel: Mythisch", icon: "Itembilder/Mythisch/Schlüssel Mythisch.png", value: 0, description: "Öffnet einen mythischen Raum mit hochwertigem Loot.", isKey: true, dropWeight: 0.15 },
     { name: "Mystische Klinge", icon: "Itembilder/Mythisch/mystic_blade.png", value: 80000, description: "Eine legendäre Klinge mit uralter Macht." },
     { name: "Zeitkristall", icon: "Itembilder/Mythisch/time_crystal.png", value: 250000, description: "Manipuliert die Zeit für einen Moment." },
     { name: "Geheime Dokumente", icon: "Itembilder/Mythisch/geheime_dokumente.png", value: 150000, description: "Streng geheime Regierungsunterlagen." },
@@ -591,9 +591,9 @@ const boxConfigs = {
     columns: 3,
     rows: 2,
     weights: {
-      Common: 75,
-      Rare: 22,
-      Epic: 3,
+      Common: 85,
+      Rare: 14,
+      Epic: 1,
       Legendary: 0,
       Mythisch: 0
     }
@@ -603,10 +603,10 @@ const boxConfigs = {
     columns: 3,
     rows: 2,
     weights: {
-      Common: 35,
-      Rare: 45,
-      Epic: 18,
-      Legendary: 2,
+      Common: 50,
+      Rare: 40,
+      Epic: 9.5,
+      Legendary: 0.5,
       Mythisch: 0
     }
   },
@@ -615,11 +615,11 @@ const boxConfigs = {
     columns: 4,
     rows: 2,
     weights: {
-      Common: 15,
-      Rare: 35,
-      Epic: 42,
-      Legendary: 7.5,
-      Mythisch: 0.5
+      Common: 30,
+      Rare: 40,
+      Epic: 28,
+      Legendary: 1.9,
+      Mythisch: 0.1
     }
   },
   "KeyRoom_Legendary": {
@@ -627,11 +627,11 @@ const boxConfigs = {
     columns: 4,
     rows: 3,
     weights: {
-      Common: 5,
-      Rare: 20,
-      Epic: 50,
-      Legendary: 22,
-      Mythisch: 3
+      Common: 10,
+      Rare: 30,
+      Epic: 45,
+      Legendary: 14,
+      Mythisch: 1
     }
   },
   "KeyRoom_Mythisch": {
@@ -640,10 +640,10 @@ const boxConfigs = {
     rows: 3,
     weights: {
       Common: 0,
-      Rare: 10,
-      Epic: 35,
-      Legendary: 40,
-      Mythisch: 15
+      Rare: 20,
+      Epic: 40,
+      Legendary: 30,
+      Mythisch: 10
     }
   }
 };
@@ -2379,8 +2379,8 @@ dom.openBtn.addEventListener('click', async () => {
           iconImg.src = getItemImagePath(nextIcon, pulledItem.rarity);
         } else {
           iconImg.onerror = null;
-          // Nutze eine neutrale Platzhalter-Grafik aus Common (mit korrekter URL-Encoding)
-          iconImg.src = getItemImagePath('Leere Karte.png', 'Common');
+          // Nutze Leere Karte als Platzhalter (ohne Leerzeichen im Dateinamen für Server-Kompatibilität)
+          iconImg.src = getItemImagePath('LeereKarte.png', 'Common');
         }
       };
     }
@@ -3263,8 +3263,8 @@ function showCollection() {
           } else {
             // Einfaches SVG mit Fragezeichen als Data-URL
             img.onerror = null; // Verhindere Loop
-            // Neutrale Platzhalter-Grafik statt 404 oder SVG (mit korrekter URL-Encoding)
-            img.src = getItemImagePath('Leere Karte.png', 'Common');
+            // Leere Karte als Platzhalter (ohne Leerzeichen im Dateinamen für Server-Kompatibilität)
+            img.src = getItemImagePath('LeereKarte.png', 'Common');
           }
         };
       }
