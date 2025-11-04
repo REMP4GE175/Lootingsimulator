@@ -1176,8 +1176,44 @@ function renderQuickslots() {
   }
 }
 
-// Sound-Instanz für das Durchsuchen
+// ======= Sound System =======
 let searchingSound = null;
+let isMuted = false;
+let globalVolume = 0.5; // Standard: 50%
+
+// Lade Sound-Settings aus localStorage
+function loadSoundSettings() {
+  try {
+    const saved = localStorage.getItem('soundSettings');
+    if (saved) {
+      const settings = JSON.parse(saved);
+      isMuted = settings.muted || false;
+      globalVolume = settings.volume !== undefined ? settings.volume : 0.5;
+    }
+  } catch (e) {
+    console.warn('Fehler beim Laden der Sound-Settings', e);
+  }
+}
+
+// Speichere Sound-Settings in localStorage
+function saveSoundSettings() {
+  try {
+    localStorage.setItem('soundSettings', JSON.stringify({
+      muted: isMuted,
+      volume: globalVolume
+    }));
+  } catch (e) {
+    console.warn('Fehler beim Speichern der Sound-Settings', e);
+  }
+}
+
+// Aktualisiere Lautstärke für alle Sounds
+function updateSoundVolume() {
+  const effectiveVolume = isMuted ? 0 : globalVolume;
+  if (searchingSound) {
+    searchingSound.volume = effectiveVolume;
+  }
+}
 
 // Suche-Animation: spielt Sound beim Durchsuchen ab
 function setSearchingState(active) {
@@ -1186,8 +1222,8 @@ function setSearchingState(active) {
     if (!searchingSound) {
       searchingSound = new Audio('Sounds/searching.mp3');
       searchingSound.loop = false; // Kein Loop, spielt nur einmal
-      searchingSound.volume = 0.5; // 50% Lautstärke
     }
+    searchingSound.volume = isMuted ? 0 : globalVolume;
     searchingSound.currentTime = 0; // Von vorne starten
     searchingSound.play().catch(e => console.warn('Sound konnte nicht abgespielt werden:', e));
   } else {
@@ -3850,3 +3886,94 @@ updateLevelUI();
   }
 })();
 
+// ======= Sound Control UI =======
+(function initSoundControls() {
+  const soundBtn = document.getElementById('soundBtn');
+  const volumeSlider = document.getElementById('volumeSlider');
+  const volumeRange = document.getElementById('volumeRange');
+  const volumePercent = document.getElementById('volumePercent');
+
+  if (!soundBtn || !volumeSlider || !volumeRange || !volumePercent) {
+    console.warn('Sound-Control-Elemente nicht gefunden');
+    return;
+  }
+
+  // Lade gespeicherte Settings
+  loadSoundSettings();
+
+  // Aktualisiere UI basierend auf gespeicherten Werten
+  function updateSoundUI() {
+    // Button-Icon und Klasse
+    if (isMuted) {
+      soundBtn.textContent = '🔇';
+      soundBtn.classList.add('muted');
+      soundBtn.title = 'Sound an';
+    } else {
+      soundBtn.textContent = '🔊';
+      soundBtn.classList.remove('muted');
+      soundBtn.title = 'Sound aus';
+    }
+    
+    // Slider-Wert
+    const volumePercValue = Math.round(globalVolume * 100);
+    volumeRange.value = volumePercValue;
+    volumePercent.textContent = `${volumePercValue}%`;
+    
+    // Slider-Gradient (visuell zeigen wo der Wert ist)
+    const percentage = volumePercValue;
+    volumeRange.style.background = `linear-gradient(to right, #4CAF50 0%, #4CAF50 ${percentage}%, #333 ${percentage}%, #333 100%)`;
+    
+    // Sound-Lautstärke aktualisieren
+    updateSoundVolume();
+  }
+
+  // Initiales UI-Update
+  updateSoundUI();
+
+  // Mute/Unmute beim Klick auf Button
+  soundBtn.addEventListener('click', () => {
+    isMuted = !isMuted;
+    updateSoundUI();
+    saveSoundSettings();
+  });
+
+  // Slider anzeigen beim Hover über den Sound-Button
+  soundBtn.addEventListener('mouseenter', () => {
+    volumeSlider.style.display = 'flex';
+  });
+
+  // Slider verstecken, wenn Maus beide Elemente verlässt
+  const hideSliderTimeout = { id: null };
+  
+  function scheduleHideSlider() {
+    clearTimeout(hideSliderTimeout.id);
+    hideSliderTimeout.id = setTimeout(() => {
+      volumeSlider.style.display = 'none';
+    }, 300);
+  }
+
+  function cancelHideSlider() {
+    clearTimeout(hideSliderTimeout.id);
+  }
+
+  soundBtn.addEventListener('mouseleave', scheduleHideSlider);
+  volumeSlider.addEventListener('mouseenter', cancelHideSlider);
+  volumeSlider.addEventListener('mouseleave', scheduleHideSlider);
+
+  // Lautstärke-Änderung
+  volumeRange.addEventListener('input', (e) => {
+    const value = parseInt(e.target.value) || 0;
+    globalVolume = value / 100;
+    updateSoundUI();
+    saveSoundSettings();
+  });
+
+  // Optional: bei Klick auf den Slider auch unmute
+  volumeRange.addEventListener('mousedown', () => {
+    if (isMuted) {
+      isMuted = false;
+      updateSoundUI();
+      saveSoundSettings();
+    }
+  });
+})();
