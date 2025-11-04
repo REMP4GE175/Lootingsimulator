@@ -380,7 +380,7 @@ const itemPools = {
     { name: "Schlüssel: Selten", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen seltenen Raum mit Rare-lastigen Loot.", isKey: true, dropWeight: 0.04 },
     { name: "Silber Ring", icon: "Itembilder/Selten/Silber Ring.png", value: 120, description: "Ein hübscher Ring mit leichtem Glanz." },
     { name: "Schatzkarte", icon: "Itembilder/Selten/Map.png", value: 250, description: "Zeigt vergessene Wege." },
-    { name: "Schachtel Zigaretten", icon: "Itembilder/Selten/zigaretten.png", value: 180, description: "Eine volle Packung, noch original verschweißt." },
+  { name: "Schachtel Zigaretten", icon: "Itembilder/Selten/zigaretten.png", value: 180, description: "Mit dem Rauchen aufzuhören ist kinderleicht. Ich habe es schon hundert Mal gemacht.", quoteAuthor: "Mark Twain" },
     { name: "Kartenspiel", icon: "Itembilder/Selten/Kartenspiel.png", value: 150, description: "Ein klassisches Deck mit aufwendigem Design." },
     { name: "Vintage-Feuerzeug", icon: "Itembilder/Selten/Feuerzeug.png", value: 140, description: "Ein Zippo mit eingraviertem Datum." },
     { name: "Alte Armbanduhr", icon: "Itembilder/Selten/Armbanduhr.png", value: 200, description: "Mechanisch, läuft noch präzise." },
@@ -397,7 +397,7 @@ const itemPools = {
     { name: "Brosche", icon: "Itembilder/Selten/Brosche.png", value: 160, description: "Mit kleinem Edelstein verziert." },
     { name: "Holz-Spielzeug", icon: "Itembilder/Selten/Holz-Spielzeug.png", value: 200, description: "Ein Blechroboter aus den 70ern." },
     { name: "Postkarten-Sammlung", icon: "Itembilder/Selten/Postkarten.png", value: 140, description: "Aus aller Welt, teilweise frankiert." },
-    { name: "Comic-Heft", icon: "Itembilder/Selten/Comic.png", value: 190, description: "Erste Ausgabe, leicht vergilbt." },
+    { name: "Comic Heft", icon: "Itembilder/Selten/Comic.png", value: 190, description: "Erste Ausgabe, leicht vergilbt." },
     { name: "USB-Stick", icon: "Itembilder/Selten/USB.png", value: 120, description: "8GB, mit alten Fotos." },
     { name: "Kopfhörer", icon: "Itembilder/Selten/Kopfhörer.png", value: 150, description: "Over-Ear, noch funktionsfähig." },
     { name: "Wecker (Analog)", icon: "Itembilder/Selten/Wecker.png", value: 140, description: "Mit lautem Klingeln." },
@@ -414,14 +414,14 @@ const itemPools = {
     { name: "Schlüssel: Episch", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen epischen Raum mit Epic-lastigen Loot.", isKey: true, dropWeight: 0.03 },
     { name: "Verzauberte Schriftrolle", icon: "Itembilder/Episch/Scroll.png", value: 600, description: "Ein Zauber, der nur einmal wirkt." },
     { name: "Phönixfeder", icon: "Itembilder/Episch/Phoenix Feder.png", value: 1200, description: "Glüht leicht in deiner Hand." },
-    { name: "Vinyl-Schallplatte", icon: "Itembilder/Episch/Vinyl.png", value: 800, description: "Limited Edition, noch versiegelt." },
+    { name: "Vinyl-Schallplatte", icon: "Itembilder/Episch/Vinyl.png", value: 800, description: "Ein Medium aus vergangenen Tagen." },
     { name: "Perlenkette", icon: "Itembilder/Episch/Perlenkette.png", value: 950, description: "Echte Süßwasserperlen." },
     { name: "Bernsteinanhänger", icon: "Itembilder/Episch/Bernstein.png", value: 1100, description: "Mit eingeschlossenem Insekt." },
     { name: "Antike Schreibfeder", icon: "Itembilder/Episch/Schreibfeder.png", value: 750, description: "Mit echtem Tintenfass." },
     { name: "Goldkette", icon: "Itembilder/Episch/Goldkette.png", value: 1000, description: "Schwere 18-Karat-Goldkette." },
     { name: "Diamantring", icon: "Itembilder/Episch/Diamantring.png", value: 1400, description: "Kleiner, aber echter Diamant." },
     { name: "Smaragd-Ohrringe", icon: "Itembilder/Episch/Smaragd-Ohrringe.png", value: 1150, description: "Facettierte grüne Edelsteine." },
-    { name: "Rubinanhänger", icon: "Itembilder/Episch/Rubinanhänger.png", value: 1300, description: "Tiefrotes Juwel in Silberfassung." },
+    { name: "Rubinanhänger", icon: "Itembilder/Episch/Rubinanhänger.png", value: 1300, description: "Tiefrotes Juwel in Goldfassung." },
     { name: "Sextant", icon: "Itembilder/Episch/Sextant.png", value: 900, description: "Navigationsgerät aus Messing." },
     { name: "Taschenuhr (Antik)", icon: "Itembilder/Episch/Taschenuhr_antik.png", value: 1100, description: "Mit aufwendiger Gravur, funktioniert noch." },
     { name: "Porzellanfigur", icon: "Itembilder/Episch/Porzellanfigur.png", value: 850, description: "Meißener Porzellan, feiner Riss." },
@@ -1285,7 +1285,7 @@ function initLootTooltip() {
   __lootTooltipEl = tip;
 }
 
-function setTooltipContent({ name = '', value = null, baseValue = null, description = '', rarity = 'Common' }) {
+function setTooltipContent({ name = '', value = null, baseValue = null, description = '', rarity = 'Common', quoteAuthor = '' }) {
   if (!__lootTooltipEl) return;
   __lootTooltipEl.style.setProperty('--tip-accent', colors[rarity] || '#888');
   __lootTooltipEl.innerHTML = '';
@@ -1310,13 +1310,31 @@ function setTooltipContent({ name = '', value = null, baseValue = null, descript
     valueEl.textContent = value != null ? `${Number(value || 0).toLocaleString('de-DE')} 💰` : 'Wert unbekannt';
   }
   
-  const descEl = document.createElement('div');
-  descEl.className = 'tip-desc';
-  descEl.textContent = description || '';
+  let descEl = null;
+  if (description) {
+    if (quoteAuthor) {
+      // Schöne Zitatdarstellung mit Autor
+      const block = document.createElement('blockquote');
+      block.className = 'tip-quote';
+      const p = document.createElement('p');
+      p.textContent = description;
+      const author = document.createElement('span');
+      author.className = 'tip-quote-author';
+      author.textContent = `— ${quoteAuthor}`;
+      block.appendChild(p);
+      block.appendChild(author);
+      descEl = block;
+    } else {
+      const div = document.createElement('div');
+      div.className = 'tip-desc';
+      div.textContent = description;
+      descEl = div;
+    }
+  }
   __lootTooltipEl.appendChild(nameEl);
   __lootTooltipEl.appendChild(rarityEl);
   __lootTooltipEl.appendChild(valueEl);
-  if (description) __lootTooltipEl.appendChild(descEl);
+  if (descEl) __lootTooltipEl.appendChild(descEl);
 }
 
 function positionTooltip(x, y) {
@@ -2387,7 +2405,8 @@ dom.openBtn.addEventListener('click', async () => {
       value: pulledItem.value,
       baseValue: pulledItem.baseValue,
       description: pulledItem.description || '',
-      rarity: pulledItem.rarity || 'Common'
+      rarity: pulledItem.rarity || 'Common',
+      quoteAuthor: pulledItem.quoteAuthor || ''
     });
 
     item.classList.add('revealed');
@@ -3274,7 +3293,8 @@ function showCollection() {
           name: item.name,
           value: item.value,
           description: item.description || '',
-          rarity
+          rarity,
+          quoteAuthor: item.quoteAuthor || ''
         });
 
         // Anzeigen des Sammelzählers als kleines Badge

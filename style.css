@@ -763,6 +763,27 @@ body {
   line-height: 1.4;
 }
 
+/* Zitatdarstellung im Tooltip */
+.loot-tooltip .tip-quote {
+  margin: 6px 0 0 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--tip-accent, #888);
+  color: #e0e0e0;
+  font-style: italic;
+}
+.loot-tooltip .tip-quote p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.loot-tooltip .tip-quote-author {
+  display: block;
+  margin-top: 6px;
+  color: #aaaaaa;
+  font-size: 11px;
+  text-align: right;
+}
+
 #closeCollectionBtn {
   position: absolute;
   top: 10px;
