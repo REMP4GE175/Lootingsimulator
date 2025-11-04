@@ -132,11 +132,20 @@ const stats = {
   }
 };
 
-// Einfache Erfolge: Meilensteine für geöffnete Boxen
-const ACHIEVEMENT_MILESTONES = [50, 100, 200, 1000];
-// Zustand: größter bereits "gesehener" Meilenstein, um Benachrichtigungs-Punkt zu steuern
+// Erfolge: Kategorien und Meilensteine
+const BOX_MILESTONES = [50, 100, 200, 1000];
+const GOLD_MILESTONES = [1000, 10000, 100000, 1000000];
+const COLLECTION_MILESTONES_PCT = [25, 50, 75, 100]; // Prozent der Items je Rarität
+
+// Zustand: welche Meilensteine je Kategorie wurden bereits "gesehen"
 let achievementsState = {
-  seenMax: 0
+  seen: {
+    boxes: 0,                // höchster erreichten Box-Meilenstein (Anzahl)
+    gold: 0,                 // höchster erreichten Gold-Meilenstein (Betrag)
+    collection: {            // pro Rarität: höchster Prozent-Meilenstein (0/25/50/75/100)
+      Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0
+    }
+  }
 };
 
 // Titel-System: Level → Titel
@@ -364,23 +373,23 @@ const itemPools = {
     // Schlüssel (Rare) – seltener als Common-Schlüssel
     { name: "Schlüssel: Selten", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen seltenen Raum mit Rare-lastigen Loot.", isKey: true, dropWeight: 0.04 },
     { name: "Silber Ring", icon: "silver_ring.png", value: 120, description: "Ein hübscher Ring mit leichtem Glanz." },
-    { name: "Traveler's Map", icon: "map.png", value: 250, description: "Zeigt vergessene Wege." },
+    { name: "Schatzkarte", icon: "map.png", value: 250, description: "Zeigt vergessene Wege." },
     { name: "Schachtel Zigaretten", icon: "zigaretten.png", value: 180, description: "Eine volle Packung, noch original verschweißt." },
     { name: "Kartenspiel", icon: "kartenspiel.png", value: 150, description: "Ein klassisches Deck mit aufwendigem Design." },
     { name: "Vintage-Feuerzeug", icon: "feuerzeug.png", value: 140, description: "Ein Zippo mit eingraviertem Datum." },
     { name: "Alte Armbanduhr", icon: "armbanduhr.png", value: 200, description: "Mechanisch, läuft noch präzise." },
     { name: "Lederbrieftasche", icon: "brieftasche.png", value: 130, description: "Hochwertig verarbeitet, leicht abgenutzt." },
     { name: "Schweizer Taschenmesser", icon: "taschenmesser.png", value: 180, description: "Mit allen wichtigen Werkzeugen." },
-    { name: "Briefmarkensammlung", icon: "briefmarken.png", value: 220, description: "Seltene Exemplare aus den 1950ern." },
-    { name: "Silbermünzen", icon: "silbermuenzen.png", value: 190, description: "Eine Handvoll alter Gedenkmünzen." },
+    { name: "Briefmarken-Sammlung", icon: "briefmarken.png", value: 220, description: "Seltene Exemplare aus den 1950ern." },
+    { name: "Silbermünzen", icon: "Silbermünzen.png", value: 190, description: "Eine Handvoll alter Gedenkmünzen." },
     { name: "Digitalkamera", icon: "kamera.png", value: 240, description: "Alte Profi-Kamera, funktioniert noch." },
     { name: "Taschenlampe (LED)", icon: "taschenlampe.png", value: 120, description: "Extrem hell, militärische Qualität." },
     { name: "Multimeter", icon: "multimeter.png", value: 150, description: "Für alle elektronischen Messungen." },
     { name: "Taschenuhr", icon: "taschenuhr.png", value: 260, description: "Goldüberzogen, mit Kette." },
     { name: "Silberkette", icon: "silberkette.png", value: 180, description: "Fein gearbeitet, leicht angelaufen." },
-    { name: "Manschettenknöpfe", icon: "manschettenknoepfe.png", value: 170, description: "Elegante Knöpfe mit Gravur." },
+    { name: "Netzteil", icon: "netzteil.png", value: 170, description: "Elegante Knöpfe mit Gravur." },
     { name: "Brosche", icon: "brosche.png", value: 160, description: "Mit kleinem Edelstein verziert." },
-    { name: "Retro-Spielzeug", icon: "spielzeug.png", value: 200, description: "Ein Blechroboter aus den 70ern." },
+    { name: "Holz-Spielzeug", icon: "Holz-Spielzeug.png", value: 200, description: "Ein Blechroboter aus den 70ern." },
     { name: "Postkarten-Sammlung", icon: "postkarten.png", value: 140, description: "Aus aller Welt, teilweise frankiert." },
     { name: "Comic-Heft", icon: "comic.png", value: 190, description: "Erste Ausgabe, leicht vergilbt." },
     { name: "USB-Stick", icon: "usb.png", value: 120, description: "8GB, mit alten Fotos." },
@@ -389,7 +398,7 @@ const itemPools = {
     { name: "Taschenrechner", icon: "taschenrechner.png", value: 110, description: "Solar-betrieben, funktioniert noch." },
     { name: "Zange", icon: "zange.png", value: 180, description: "Kombinationszange in gutem Zustand." },
     { name: "Hammer", icon: "hammer.png", value: 170, description: "Kleiner Schlosserhammer." },
-    { name: "Maßband", icon: "massband.png", value: 130, description: "5 Meter, etwas ausgeleiert." },
+    { name: "Maßband", icon: "maßband.png", value: 130, description: "5 Meter, etwas ausgeleiert." },
     { name: "Schraubenschlüssel", icon: "schraubenschluessel.png", value: 160, description: "Verstellbar, leicht rostig." },
     { name: "Sonnenbrille", icon: "sonnenbrille.png", value: 150, description: "Designer-Imitat, cooles Modell." },
     { name: "Portemonnaie", icon: "portemonnaie.png", value: 190, description: "Leder, mit initialen Prägung." }
@@ -447,7 +456,7 @@ const itemPools = {
   ],
   Mythisch: [
     // Schlüssel (Mythisch) – extrem selten
-    { name: "Schlüssel: Mythisch", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen mythischen Raum mit hochwertigem Loot.", isKey: true, dropWeight: 0.007 },
+    { name: "Schlüssel: Mythisch", icon: "Schlüssel Mythisch.png", value: 0, description: "Öffnet einen mythischen Raum mit hochwertigem Loot.", isKey: true, dropWeight: 0.007 },
     { name: "Mystic Blade", icon: "mystic_blade.png", value: 80000, description: "Eine legendäre Klinge mit uralter Macht." },
     { name: "Time Crystal", icon: "time_crystal.png", value: 250000, description: "Manipuliert die Zeit für einen Moment." },
     { name: "Geheime Dokumente", icon: "geheime_dokumente.png", value: 150000, description: "Streng geheime Regierungsunterlagen." },
@@ -1993,7 +2002,20 @@ function loadProgress() {
       Object.assign(stats, progress.stats);
     }
     if (progress.achievementsState) {
-      Object.assign(achievementsState, progress.achievementsState);
+      // Migration: altes seenMax -> neues Schema
+      if (typeof progress.achievementsState.seenMax === 'number') {
+        achievementsState.seen = achievementsState.seen || { boxes: 0, gold: 0, collection: { Common:0,Rare:0,Epic:0,Legendary:0,Mythisch:0 } };
+        achievementsState.seen.boxes = Math.max(achievementsState.seen.boxes || 0, progress.achievementsState.seenMax || 0);
+      }
+      if (progress.achievementsState.seen) {
+        const seen = progress.achievementsState.seen;
+        achievementsState.seen = achievementsState.seen || { boxes: 0, gold: 0, collection: { Common:0,Rare:0,Epic:0,Legendary:0,Mythisch:0 } };
+        if (typeof seen.boxes === 'number') achievementsState.seen.boxes = seen.boxes;
+        if (typeof seen.gold === 'number') achievementsState.seen.gold = seen.gold;
+        if (seen.collection && typeof seen.collection === 'object') {
+          achievementsState.seen.collection = { Common:0,Rare:0,Epic:0,Legendary:0,Mythisch:0, ...seen.collection };
+        }
+      }
     }
     if (progress.activeBoosts) {
       Object.assign(activeBoosts, progress.activeBoosts);
@@ -3150,7 +3172,13 @@ function resetProgress() {
     stats.boxOpenCounts[key] = 0;
   }
   // Erfolge zurücksetzen
-  achievementsState.seenMax = 0;
+  achievementsState = {
+    seen: {
+      boxes: 0,
+      gold: 0,
+      collection: { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 }
+    }
+  };
   
   // UI aktualisieren
   updateLevelUI();
@@ -3284,12 +3312,31 @@ function closeCollection() {
 }
 
 // ======= Achievements (Erfolge) =======
-function currentMaxMilestoneReached() {
+function boxesMaxMilestoneReached() {
   const opened = stats.totalBoxesOpened || 0;
   let max = 0;
-  for (const m of ACHIEVEMENT_MILESTONES) {
-    if (opened >= m && m > max) max = m;
-  }
+  for (const m of BOX_MILESTONES) { if (opened >= m && m > max) max = m; }
+  return max;
+}
+
+function goldMaxMilestoneReached() {
+  const earned = stats.totalGoldEarned || 0;
+  let max = 0;
+  for (const m of GOLD_MILESTONES) { if (earned >= m && m > max) max = m; }
+  return max;
+}
+
+function collectionPercentForRarity(rarity) {
+  const total = (itemPools[rarity] || []).length;
+  const count = (itemPools[rarity] || []).filter(it => discoveredItems.has(it.name)).length;
+  if (total <= 0) return 0;
+  return Math.floor((count / total) * 100);
+}
+
+function collectionMaxMilestoneReached(rarity) {
+  const pct = collectionPercentForRarity(rarity);
+  let max = 0;
+  for (const p of COLLECTION_MILESTONES_PCT) { if (pct >= p && p > max) max = p; }
   return max;
 }
 
@@ -3309,15 +3356,29 @@ function setAchievementsNotify(active) {
 }
 
 function updateAchievementsNotify() {
-  const maxReached = currentMaxMilestoneReached();
-  const unseen = maxReached > (achievementsState.seenMax || 0);
-  setAchievementsNotify(unseen);
+  try {
+    const seen = achievementsState?.seen || { boxes: 0, gold: 0, collection: {} };
+    const boxMax = boxesMaxMilestoneReached();
+    const goldMax = goldMaxMilestoneReached();
+    const colMaxes = rarities.map(r => collectionMaxMilestoneReached(r));
+    const colSeen = rarities.map(r => (seen.collection?.[r] || 0));
+    const anyColUnseen = colMaxes.some((m, idx) => m > colSeen[idx]);
+    const unseen = (boxMax > (seen.boxes || 0)) || (goldMax > (seen.gold || 0)) || anyColUnseen;
+    setAchievementsNotify(unseen);
+  } catch (_) {
+    // Fallback: nur Boxen prüfen
+    const boxMax = boxesMaxMilestoneReached();
+    const seenMaxCompat = achievementsState.seenMax || 0;
+    setAchievementsNotify(boxMax > seenMaxCompat);
+  }
 }
 
 function showAchievements() {
   if (!dom.achievementsOverlay || !dom.achievementsContent) return;
+
+  // Kategorie: Boxen
   const opened = stats.totalBoxesOpened || 0;
-  const items = ACHIEVEMENT_MILESTONES.map(m => {
+  const boxItems = BOX_MILESTONES.map(m => {
     const done = opened >= m;
     const progressPct = Math.min(100, Math.round((opened / m) * 100));
     return `
@@ -3329,28 +3390,71 @@ function showAchievements() {
     `;
   }).join('');
 
+  // Kategorie: Sammlung (pro Rarität)
+  const collectionSection = rarities.map(r => {
+    const pct = collectionPercentForRarity(r);
+    return `
+      <div class="stat-item">
+        <span class="stat-label">${displayRarityName(r)}</span>
+        <span class="stat-value">${pct}%</span>
+      </div>
+      <div class="progress-bar-container"><div class="progress-bar" style="width:${pct}%"></div></div>
+    `;
+  }).join('');
+
+  // Kategorie: Gold
+  const earned = stats.totalGoldEarned || 0;
+  const goldItems = GOLD_MILESTONES.map(m => {
+    const done = earned >= m;
+    const progressPct = Math.min(100, Math.round((earned / m) * 100));
+    return `
+      <div class="stat-item">
+        <span class="stat-label">Verdiene ${m.toLocaleString('de-DE')} 💰</span>
+        <span class="stat-value">${done ? '✅ Erreicht' : `${earned.toLocaleString('de-DE')} / ${m.toLocaleString('de-DE')} 💰`}</span>
+      </div>
+      <div class="progress-bar-container"><div class="progress-bar" style="width:${progressPct}%"></div></div>
+    `;
+  }).join('');
+
   dom.achievementsContent.innerHTML = `
     <div class="stats-section">
-      <h3>📦 Gesamtfortschritt</h3>
-      <div class="stat-item">
-        <span class="stat-label">Geöffnete Boxen gesamt:</span>
-        <span class="stat-value">${opened.toLocaleString('de-DE')}</span>
-      </div>
+      <h3>📦 Boxen</h3>
+      ${boxItems}
     </div>
     <div class="stats-section">
-      <h3>🏆 Meilensteine</h3>
-      ${items}
+      <h3>📚 Sammlung (pro Rarität)</h3>
+      ${collectionSection}
+    </div>
+    <div class="stats-section">
+      <h3>💰 Gold</h3>
+      ${goldItems}
     </div>
   `;
 
   dom.achievementsOverlay.style.display = 'block';
 
-  // Als gesehen markieren (höchsten erreichten Meilenstein)
-  const maxReached = currentMaxMilestoneReached();
-  if (maxReached > (achievementsState.seenMax || 0)) {
-    achievementsState.seenMax = maxReached;
-    saveProgress();
+  // Als gesehen markieren (höchsten erreichten Meilensteine in allen Kategorien)
+  try {
+    const seen = achievementsState.seen || { boxes: 0, gold: 0, collection: {} };
+    const boxMax = boxesMaxMilestoneReached();
+    const goldMax = goldMaxMilestoneReached();
+    const colSeen = seen.collection || {};
+    const newColSeen = { ...colSeen };
+    for (const r of rarities) {
+      const m = collectionMaxMilestoneReached(r);
+      newColSeen[r] = Math.max(m, newColSeen[r] || 0);
+    }
+    achievementsState.seen = {
+      boxes: Math.max(seen.boxes || 0, boxMax),
+      gold: Math.max(seen.gold || 0, goldMax),
+      collection: newColSeen
+    };
+  } catch (_) {
+    // Kompatibilität mit alten Saves
+    const compat = boxesMaxMilestoneReached();
+    if (compat > (achievementsState.seenMax || 0)) achievementsState.seenMax = compat;
   }
+  saveProgress();
   updateAchievementsNotify();
 }
 
