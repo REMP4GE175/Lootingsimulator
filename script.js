@@ -350,7 +350,7 @@ const itemPools = {
     { name: "Seil", icon: "Itembilder/Common/Seil.png", value: 26, description: "Ein kurzes, ausgefranstes Seil." },
     { name: "Stofflappen", icon: "Itembilder/Common/Stofflappen.png", value: 17, description: "Ein schmutziger Lappen." },
     { name: "Metallschrott", icon: "Itembilder/Common/Metallschrott.png", value: 29, description: "Ein rostiges Stück Metall." },
-    { name: "Leere Dose", icon: "Itembilder/Common/Leere Dose.png", value: 21, description: "Eine zerbeulte, leere Dose." },
+    { name: "Alte Dose", icon: "Itembilder/Common/Dose.png", value: 21, description: "Eine zerbeulte, leere Dose." },
     { name: "Einzelne Socke", icon: "Itembilder/Common/Einzelner Socke.png", value: 20, description: "Wo ist der andere hin?" },
     { name: "Gummiband", icon: "Itembilder/Common/Gummiband.png", value: 18, description: "Ein ausgeleiertes Haargummi." },
     { name: "Alter Schlüssel", icon: "Itembilder/Common/Schlüssel.png", value: 23, description: "Passt nirgendwo rein." },
@@ -380,7 +380,7 @@ const itemPools = {
     { name: "Schlüssel: Selten", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen seltenen Raum mit Rare-lastigen Loot.", isKey: true, dropWeight: 0.04 },
     { name: "Silber Ring", icon: "Itembilder/Selten/Silber Ring.png", value: 120, description: "Ein hübscher Ring mit leichtem Glanz." },
     { name: "Schatzkarte", icon: "Itembilder/Selten/Map.png", value: 250, description: "Zeigt vergessene Wege." },
-  { name: "Schachtel Zigaretten", icon: "Itembilder/Selten/zigaretten.png", value: 180, description: "Mit dem Rauchen aufzuhören ist kinderleicht. Ich habe es schon hundert Mal gemacht.", quoteAuthor: "Mark Twain" },
+  { name: "Schachtel Zigaretten", icon: "Itembilder/Selten/zigaretten.png", value: 180, description: "\"Mit dem Rauchen aufzuhören ist kinderleicht. Ich habe es schon hundert Mal gemacht.\"", quoteAuthor: "Mark Twain" },
     { name: "Kartenspiel", icon: "Itembilder/Selten/Kartenspiel.png", value: 150, description: "Ein klassisches Deck mit aufwendigem Design." },
     { name: "Vintage-Feuerzeug", icon: "Itembilder/Selten/Feuerzeug.png", value: 140, description: "Ein Zippo mit eingraviertem Datum." },
     { name: "Alte Armbanduhr", icon: "Itembilder/Selten/Armbanduhr.png", value: 200, description: "Mechanisch, läuft noch präzise." },
@@ -591,9 +591,9 @@ const boxConfigs = {
     columns: 3,
     rows: 2,
     weights: {
-      Common: 85,
-      Rare: 14,
-      Epic: 1,
+      Common: 75,
+      Rare: 22,
+      Epic: 3,
       Legendary: 0,
       Mythisch: 0
     }
@@ -603,10 +603,10 @@ const boxConfigs = {
     columns: 3,
     rows: 2,
     weights: {
-      Common: 50,
-      Rare: 40,
-      Epic: 9.5,
-      Legendary: 0.5,
+      Common: 35,
+      Rare: 45,
+      Epic: 18,
+      Legendary: 2,
       Mythisch: 0
     }
   },
@@ -615,11 +615,11 @@ const boxConfigs = {
     columns: 4,
     rows: 2,
     weights: {
-      Common: 30,
-      Rare: 40,
-      Epic: 28,
-      Legendary: 1.9,
-      Mythisch: 0.1
+      Common: 15,
+      Rare: 35,
+      Epic: 42,
+      Legendary: 7.5,
+      Mythisch: 0.5
     }
   },
   "KeyRoom_Legendary": {
@@ -627,11 +627,11 @@ const boxConfigs = {
     columns: 4,
     rows: 3,
     weights: {
-      Common: 10,
-      Rare: 30,
-      Epic: 45,
-      Legendary: 14,
-      Mythisch: 1
+      Common: 5,
+      Rare: 20,
+      Epic: 50,
+      Legendary: 22,
+      Mythisch: 3
     }
   },
   "KeyRoom_Mythisch": {
@@ -640,10 +640,10 @@ const boxConfigs = {
     rows: 3,
     weights: {
       Common: 0,
-      Rare: 20,
-      Epic: 40,
-      Legendary: 30,
-      Mythisch: 10
+      Rare: 10,
+      Epic: 35,
+      Legendary: 40,
+      Mythisch: 15
     }
   }
 };
@@ -839,15 +839,19 @@ function getWeightedItemCount(boxType) {
   
   // Bestimme Füllrate-Ziel basierend auf Box-Typ
   // Reduziert: Box 1-3: 60% Durchschnitt, Box 4-5: 50%, Box 6-7: 60%
-  const boxNumber = parseInt(boxType.replace('Box#', ''));
-  const targetFillRate = (boxNumber <= 3 || boxNumber >= 6) ? 0.6 : 0.5;
+  const isKR = isKeyRoom(boxType);
+  const boxNumber = isKR ? NaN : parseInt((boxType || '').replace('Box#', ''));
+  // KeyRooms sollen tendenziell voller sein
+  const targetFillRate = isKR
+    ? 0.7
+    : ((boxNumber <= 3 || boxNumber >= 6) ? 0.6 : 0.5);
   
   // Glücksbonus: +2% Füllrate pro Glückspunkt (inkl. Boosts)
   let g = (skills.glueck || 0) + (statUpgradesLevels.luck || 0);
   if (activeBoosts.rarityBoostUses > 0) {
     g = g * (1 + activeBoosts.rarityBoost);
   }
-  const luckFillBonus = 0.02 * g; // +2% pro Glückspunkt
+  const luckFillBonus = 0.02 * g; // +2% pro Glückspunkt (wirkt auch in KeyRooms)
 
   // Normalverteilung um den Zielwert herum, begrenzt auf 20-100%
   // Verwende Box-Muller-Transformation für Normalverteilung
@@ -859,11 +863,19 @@ function getWeightedItemCount(boxType) {
   // Skaliere auf mean=targetFillRate, stddev=12% (geringere Streuung)
   let fillRate = targetFillRate + luckFillBonus + (z0 * 0.12);
 
-  // Begrenze auf 20-100%
-  fillRate = Math.max(0.2, Math.min(1.0, fillRate));
+  // Begrenze auf 20-100% (KeyRooms minimal etwas höher)
+  const minFill = isKR ? 0.3 : 0.2;
+  fillRate = Math.max(minFill, Math.min(1.0, fillRate));
 
   // Berechne Anzahl Items
   let itemCount = Math.max(1, Math.floor(totalSlots * fillRate));
+
+  // Zusatzeffekt durch Glück: kleine Chance auf +1 Item
+  // +3% pro Glückspunkt (inkl. Shop/Boosts), gedeckelt bei 50%
+  const extraChance = Math.min(0.5, 0.03 * g);
+  if (Math.random() < extraChance) {
+    itemCount += 1;
+  }
 
   // Maximal alle Slots füllen
   itemCount = Math.min(itemCount, totalSlots);
@@ -911,34 +923,7 @@ function getRandomItem(boxType) {
 // 🎲 Gewichtete Itemanzahl abhängig vom Box-Typ
 // Wählt anhand der konfigurierten Bereiche eine zufällige Item-Anzahl (gewichteter Pool)
 // Berechnet die Anzahl der Items basierend auf Slot-Füllrate (20-100%, Peak bei 50%)
-function getWeightedItemCount(boxType) {
-  const columns = boxConfigs[boxType].columns || 4;
-  const rows = boxConfigs[boxType].rows || 3;
-  const totalSlots = columns * rows;
-  
-  // Bestimme Füllrate-Ziel basierend auf Box-Typ
-  // Reduziert: Box 1-3: 60% Durchschnitt, Box 4-5: 50%, Box 6-7: 60%
-  const boxNumber = parseInt(boxType.replace('Box#', ''));
-  const targetFillRate = (boxNumber <= 3 || boxNumber >= 6) ? 0.6 : 0.5;
-  
-  // Normalverteilung um den Zielwert herum, begrenzt auf 20-100%
-  // Verwende Box-Muller-Transformation für Normalverteilung
-  const u1 = Math.random();
-  const u2 = Math.random();
-  const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
-  
-  // z0 ist normalverteilt mit mean=0, stddev=1
-  // Skaliere auf mean=targetFillRate, stddev=12% (geringere Streuung)
-  let fillRate = targetFillRate + (z0 * 0.12);
-  
-  // Begrenze auf 20-100%
-  fillRate = Math.max(0.2, Math.min(1.0, fillRate));
-  
-  // Berechne Anzahl Items
-  const itemCount = Math.max(1, Math.floor(totalSlots * fillRate));
-  
-  return itemCount;
-}
+// (Entfernt) Duplikat – die Version oben mit Glücksbonus und Extra-Chance wird verwendet
 
 // Setzt den aktuellen Box-Typ (wird auch von HTML onclick benutzt)
 function selectBox(type) {
@@ -1578,6 +1563,10 @@ function getRarityForKeyRoom(name) {
     case 'KeyRoom_Mythisch': return 'Mythisch';
     default: return null;
   }
+}
+
+function isKeyRoom(name) {
+  return typeof name === 'string' && name.startsWith('KeyRoom_');
 }
 
 // Stellt sicher, dass der Öffnen-Button ein Icon-Container-Span besitzt
@@ -2850,7 +2839,7 @@ function populateBoxInfo() {
       html += `💰 Wohlstand: +${valueBonus}% Item-Wert (+3% pro Punkt)<br>`;
     }
     if (skills.glueck > 0) {
-      html += `🍀 Glück: Erhöhte Rarity-Chancen (${skills.glueck} Punkte)<br>`;
+      html += `🍀 Glück: Erhöhte Rarity-Chancen + mehr Items (${skills.glueck} Punkte)<br>`;
     }
     if (skills.effizienz > 0) {
       html += `⚡ Tempo: -${tempoBonus}% Untersuchungszeit (-3,5% pro Punkt)<br>`;
