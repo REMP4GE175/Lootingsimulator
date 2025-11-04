@@ -113,6 +113,12 @@ let playerLevel = 0;
 let playerXP = 0;
 let skillPoints = 0;
 
+// Prestige-System: globale, dauerhafte Meta-Progression
+// Jede Prestige-Stufe verleiht: +5% Itemwert (stackt) und +1 Glück (stackt)
+let prestigeState = {
+  level: 0
+};
+
 // Skill-Tree: 3 Zweige mit jeweils maximal 20/20/10 Punkten
 const skills = {
   wohlstand: 0,   // Jeder Punkt: +3% Item-Wert (max 20 = +60%)
@@ -310,11 +316,14 @@ let __nextOpenIsFree = false;
 
 // Berechnet benötigte XP für nächstes Level (exponentielle Kurve)
 function getXPForLevel(level) {
-  // Slightly slower curve: raises required XP per level a bit more than before
-  // Previously: 500 * 1.18^(L-1) → Now: 500 * 1.21^(L-1)
-  // Level cap at 50
+  // Ziel: Gesamtsumme 0→50 ≈ 25.000.000 XP
+  // Beibehaltene Basis: 500, Wachstumsfaktor feinjustiert auf ~1.203
+  // Summe S ≈ 500 * (1.203^50 - 1) / (1.203 - 1) ≈ 25.1 Mio (ohne floor)
+  // Hinweis: floor() pro Stufe reduziert die reale Summe leicht Richtung 25 Mio.
   if (level > MAX_LEVEL) return Infinity;
-  return Math.floor(500 * Math.pow(1.21, level));
+  const BASE_XP = 500;
+  const GROWTH = 1.203; // vorher 1.21
+  return Math.floor(BASE_XP * Math.pow(GROWTH, level));
 }
 
 // Gibt aktuellen Titel basierend auf Level zurück
@@ -752,7 +761,8 @@ function getValueMultiplier() {
   const shopPermBonus = 1 + (permVBCount * 0.1); // max einmal +10%
   const shopStatWealth = 1 + ((statUpgradesLevels.wealth || 0) * 0.02); // +2% pro Stufe (Shop-Stat)
   const tempBonus = (activeBoosts.valueBoostUses > 0) ? (1 + activeBoosts.valueBoost) : 1; // temporärer Boost
-  return skillBonus * shopPermBonus * shopStatWealth * tempBonus;
+  const prestigeBonus = 1 + (prestigeState.level * 0.05); // +5% pro Prestige-Stufe
+  return skillBonus * shopPermBonus * shopStatWealth * tempBonus * prestigeBonus;
 }
 
 // Modifiziert die Drop-Gewichte basierend auf Glück-Skills + temporären Shop-Boosts
@@ -760,7 +770,7 @@ function applyLuckBonus(weights, boxType) {
   // Ziel: Mythisch-Chance bleibt je Box aufsteigend (Box1 < ... < Box7), auch mit Glück.
   // Ansatz: Proportionale Verschiebung – ein prozentualer Anteil jeder Rarität fließt in die nächst-seltenere.
   // Dadurch wächst der Zuwachs bei Mythisch mit dem vorhandenen Legendary-Anteil der jeweiligen Box und bewahrt die Rangfolge.
-  let g = (skills.glueck || 0) + (statUpgradesLevels.luck || 0);
+  let g = (skills.glueck || 0) + (statUpgradesLevels.luck || 0) + (prestigeState.level || 0);
   
   // Temporärer Rarity-Boost aus Shop
   if (activeBoosts.rarityBoostUses > 0) {
@@ -826,7 +836,9 @@ function getTempoMultiplier() {
   const shopReduce = (statUpgradesLevels.tempo || 0) * 0.02;
   const permTempoCount = Math.min(1, (permanentUpgrades.permTempoBoost || 0));
   const permReduce = permTempoCount * 0.10; // max einmal -10%
-  const raw = 1 - (skillReduce + shopReduce + permReduce);
+  // Prestige-Bonus: -2% Untersuchungszeit pro Prestige-Stufe
+  const prestigeReduce = (prestigeState.level || 0) * 0.02;
+  const raw = 1 - (skillReduce + shopReduce + permReduce + prestigeReduce);
   // Kappe damit es nicht zu 0 fällt
   return Math.max(0.3, Math.min(1, raw));
 }
@@ -847,7 +859,7 @@ function getWeightedItemCount(boxType) {
     : ((boxNumber <= 3 || boxNumber >= 6) ? 0.6 : 0.5);
   
   // Glücksbonus: +2% Füllrate pro Glückspunkt (inkl. Boosts)
-  let g = (skills.glueck || 0) + (statUpgradesLevels.luck || 0);
+  let g = (skills.glueck || 0) + (statUpgradesLevels.luck || 0) + (prestigeState.level || 0);
   if (activeBoosts.rarityBoostUses > 0) {
     g = g * (1 + activeBoosts.rarityBoost);
   }
@@ -1044,6 +1056,17 @@ const dom = {
   shopBalance: document.getElementById('shopBalance'),
   shopContent: document.getElementById('shopContent')
 };
+
+// Prestige DOM
+dom.prestigeBtn = document.getElementById('prestigeBtn');
+dom.prestigeStarNum = (function(){
+  const btn = document.getElementById('prestigeBtn');
+  return btn ? btn.querySelector('.prestige-star .num') : null;
+})();
+dom.prestigeModal = document.getElementById('prestigeModal');
+dom.closePrestigeBtn = document.getElementById('closePrestigeBtn');
+dom.confirmPrestigeBtn = document.getElementById('confirmPrestigeBtn');
+dom.prestigeInfo = document.getElementById('prestigeInfo');
 
 // ======= Quickslots (Trankgürtel) =======
 function ensureQuickslotsContainer() {
@@ -2039,7 +2062,8 @@ function saveProgress() {
       permanentUpgrades: { ...permanentUpgrades },
       purchasedItems: Array.from(purchasedItems),
       statUpgradesLevels: { ...statUpgradesLevels },
-      keysInventory: { ...keysInventory }
+      keysInventory: { ...keysInventory },
+      prestigeState: { ...prestigeState }
     };
     localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
   } catch (e) {
@@ -2114,6 +2138,15 @@ function loadProgress() {
     }
     if (progress.keysInventory) {
       Object.assign(keysInventory, progress.keysInventory);
+    }
+    if (progress.prestigeState) {
+      // robust merge; ensure level is a non-negative integer
+      try {
+        const lvl = parseInt(progress.prestigeState.level, 10);
+        prestigeState.level = isFinite(lvl) && lvl >= 0 ? lvl : 0;
+      } catch (_) {
+        prestigeState.level = 0;
+      }
     }
   } catch (e) {
     console.warn('Failed to load progress', e);
@@ -2765,6 +2798,11 @@ function updateBoxAvailability() {
       btn.style.display = '';
     }
     
+  // Anzeigename, Icon und Kosten-Text (vorab, wird in beiden Zweigen genutzt)
+  const displayName = boxDisplayNames[boxName] || boxName;
+  const costText = formatCost(boxCost);
+  const icon = getBoxIcon(boxName);
+
     if (isUnlocked) {
       // Box ist permanent freigeschaltet
       btn.classList.remove('locked');
@@ -2777,14 +2815,10 @@ function updateBoxAvailability() {
         btn.classList.remove('affordable');
       }
       
-      // Anzeigename und Kosten
-      const displayName = boxDisplayNames[boxName] || boxName;
-      const costText = formatCost(boxCost);
-      const icon = getBoxIcon(boxName);
-      // Zeige Icon und Namen, bei Free ohne Geld-Emoji
+      // Zweizeilig: Icon + Titel oben, Preis unten in Klammern
       const newHTML = (boxCost === 0)
-        ? `${icon} ${displayName} (${costText})`
-        : `${icon} ${displayName} (${costText} 💰)`;
+        ? `${icon} ${displayName}<br><small>(${costText})</small>`
+        : `${icon} ${displayName}<br><small>(${costText} 💰)</small>`;
       
       // Nur innerHTML ändern, wenn es sich wirklich geändert hat (verhindert Layout thrash)
       if (btn.innerHTML !== newHTML) {
@@ -2795,8 +2829,8 @@ function updateBoxAvailability() {
       btn.classList.add('locked');
       btn.classList.remove('affordable');
       btn.disabled = true;
-      // Zeige Schloss-Icon und Kosten auf gesperrten Buttons
-      const newHTML = `🔒 ${formatCost(boxCost)} 💰`;
+  // Zweizeilig auch im gesperrten Zustand, mit Schloss-Symbol + Icon
+  const newHTML = `🔒 ${icon} ${displayName}<br><small>(${costText} 💰)</small>`;
       if (btn.innerHTML !== newHTML) {
         btn.innerHTML = newHTML;
       }
@@ -3799,6 +3833,171 @@ dom.upgradeEffizienz.addEventListener('click', () => {
 // Initial UI Update
 updateLevelUI();
 
+// ======= Prestige System =======
+function getDiscoveredCountByRarity(rarity) {
+  try {
+    const pool = itemPools[rarity] || [];
+    const names = new Set(pool.map(it => it.name));
+    let count = 0;
+    for (const name of discoveredItems) {
+      if (names.has(name)) count++;
+    }
+    return count;
+  } catch (_) {
+    return 0;
+  }
+}
+
+function canPrestige() {
+  const hasLevel = playerLevel >= MAX_LEVEL;
+  const hasMyth = getDiscoveredCountByRarity('Mythisch') >= 5;
+  const hasBoxes = (stats.totalBoxesOpened || 0) >= 200;
+  return hasLevel && hasMyth && hasBoxes;
+}
+
+function updatePrestigeUI() {
+  try {
+    if (dom.prestigeStarNum) {
+      dom.prestigeStarNum.textContent = String(prestigeState.level || 0);
+    }
+    if (dom.prestigeBtn) {
+      dom.prestigeBtn.disabled = false; // immer klickbar, Modal zeigt Bedingungen
+      dom.prestigeBtn.title = canPrestige()
+        ? 'Meta-Boni & Reset'
+        : `Erreiche Level ${MAX_LEVEL} (Meta-Boni & Reset)`;
+    }
+    if (dom.prestigeInfo) {
+      const nextLvl = (prestigeState.level || 0) + 1;
+      const currBonusValue = (prestigeState.level * 5) || 0;
+      const currBonusLuck = prestigeState.level || 0;
+      const nextBonusValue = currBonusValue + 5;
+      const nextBonusLuck = currBonusLuck + 1;
+      const cLevel = playerLevel >= MAX_LEVEL;
+      const cMyth = getDiscoveredCountByRarity('Mythisch') >= 5;
+      const cBoxes = (stats.totalBoxesOpened || 0) >= 200;
+      dom.prestigeInfo.innerHTML = `
+        <h3>Bedingungen</h3>
+        <ul class="prestige-conds">
+          <li class="${cLevel ? 'ok' : 'fail'}">- Level ${MAX_LEVEL} ${cLevel ? '✓' : ''}</li>
+          <li class="${cMyth ? 'ok' : 'fail'}">- 5 Mythische Items ${cMyth ? '✓' : ''}</li>
+          <li class="${cBoxes ? 'ok' : 'fail'}">- 200 Boxen geöffnet ${cBoxes ? '✓' : ''}</li>
+        </ul>
+        <h3>Auswirkungen</h3>
+        <p>Run-Reset:</p>
+        <ul>
+          <li>Level, XP, Skills, Shop-Upgrades, Guthaben</li>
+          <li>Entdeckungen und Schlüssel-Inventar</li>
+        </ul>
+        <p>Bleibt bestehen:</p>
+        <ul>
+          <li>Statistiken und Erfolge</li>
+        </ul>
+        <p><strong>Dauerhafte Boni je Stufe:</strong></p>
+        <ul>
+          <li>+5% Item-Wert multiplikativ (aktuell: +${currBonusValue}%)</li>
+          <li>+1 Punkt Glück (aktuell: +${currBonusLuck})</li>
+          <li>-2% Untersuchungszeit (aktuell: -${(prestigeState.level||0)*2}%)</li>
+        </ul>
+        <p>Nächste Stufe (${nextLvl}): +${nextBonusValue}% Wert, +${nextBonusLuck} Glück, -2% Zeit</p>
+        <p style="opacity:${canPrestige()?1:0.7}"><em>${canPrestige() ? 'Bereit zum Prestigen.' : 'Bedingungen noch nicht erfüllt.'}</em></p>
+      `;
+    }
+    if (dom.confirmPrestigeBtn) {
+      dom.confirmPrestigeBtn.disabled = !canPrestige();
+      dom.confirmPrestigeBtn.title = canPrestige() ? 'Prestige jetzt durchführen' : `Erreiche Level ${MAX_LEVEL}`;
+    }
+  } catch (_) { /* ignore */ }
+}
+
+if (dom.prestigeBtn) {
+  dom.prestigeBtn.addEventListener('click', () => {
+    if (!dom.prestigeModal) return;
+    updatePrestigeUI();
+    dom.prestigeModal.style.display = 'block';
+  });
+}
+if (dom.closePrestigeBtn) {
+  dom.closePrestigeBtn.addEventListener('click', () => {
+    if (dom.prestigeModal) dom.prestigeModal.style.display = 'none';
+  });
+}
+if (dom.prestigeModal) {
+  dom.prestigeModal.addEventListener('click', (e) => {
+    if (e.target === dom.prestigeModal) dom.prestigeModal.style.display = 'none';
+  });
+}
+
+function doPrestige() {
+  if (!canPrestige()) {
+    alert(`Du musst Level ${MAX_LEVEL} erreichen, um zu prestigen.`);
+    return;
+  }
+  // Sicherheitsabfrage
+  if (!confirm('Prestige durchführen? Dein Run wird zurückgesetzt, dauerhafte Boni bleiben.')) {
+    return;
+  }
+
+  // Steigere Prestige-Stufe
+  prestigeState.level = (prestigeState.level || 0) + 1;
+
+  // Reset: Progress und Run-bezogene Strukturen
+  balance = 500;
+  playerLevel = 0;
+  playerXP = 0;
+  skillPoints = 0;
+  skills.wohlstand = 0;
+  skills.glueck = 0;
+  skills.effizienz = 0;
+
+  // Shop/Upgrades zurücksetzen
+  activeBoosts = { valueBoost: 0, rarityBoost: 0, xpBoost: 0, valueBoostUses: 0, rarityBoostUses: 0, xpBoostUses: 0 };
+  permanentUpgrades = { permTempoBoost: 0, permValueBoost: 0, permXPBoost: 0, permPotionBelt: 0 };
+  statUpgradesLevels = { wealth: 0, luck: 0, tempo: 0 };
+  purchasedItems = new Set();
+
+  // Boxen/Inventar
+  unlockedBoxes.clear();
+  unlockedBoxes.add('Box#1');
+  boxType = 'Box#1';
+  keysInventory = { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 };
+
+  // Items/Entdeckungen: zurücksetzen
+  itemCounts = {};
+  discoveredItems.clear();
+  discoveredKeyRarities = new Set();
+  saveKeyDiscovery();
+  saveCounts();
+
+  // Stats behalten wir als Lifetime; optional könnte man Run-Stats separat führen
+
+  // UI & Persistenz
+  updateBalance();
+  updateBoxAvailability();
+  createEmptyGrid();
+  updateOpenBtnIcon();
+  renderQuickslots();
+  updateLevelUI();
+  updatePrestigeUI();
+  saveProgress();
+
+  // Schließe Modal und zeige kleines Feedback
+  if (dom.prestigeModal) dom.prestigeModal.style.display = 'none';
+  try {
+    const n = document.createElement('div');
+    n.className = 'level-up-notification';
+    n.innerHTML = '<div class="level-up-content"><h2>✨ Prestige!</h2><p>Dauerhafte Boni verbessert.</p></div>';
+    document.body.appendChild(n);
+    setTimeout(() => { n.classList.add('fade-out'); setTimeout(() => n.remove(), 500); }, 1800);
+  } catch (_) { /* ignore */ }
+}
+
+if (dom.confirmPrestigeBtn) {
+  dom.confirmPrestigeBtn.addEventListener('click', () => doPrestige());
+}
+
+// Initial Prestige-UI Sync
+updatePrestigeUI();
+
 // ======= App-Version laden und anzeigen + Update-Checker =======
 (function setupVersioning() {
   const VERSION_URL = 'version.json';
@@ -3969,5 +4168,146 @@ updateLevelUI();
       updateSoundUI();
       saveSoundSettings();
     }
+  });
+})();
+
+// ======= Export/Import Spielstand =======
+(function initExportImport() {
+  const exportBtn = document.getElementById('exportBtn');
+  const importBtn = document.getElementById('importBtn');
+  const importFile = document.getElementById('importFile');
+
+  if (!exportBtn || !importBtn || !importFile) return;
+
+  function formatTimestamp(d = new Date()) {
+    const pad = (n) => String(n).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const MM = pad(d.getMonth() + 1);
+    const dd = pad(d.getDate());
+    const HH = pad(d.getHours());
+    const mm = pad(d.getMinutes());
+    return `${yyyy}${MM}${dd}-${HH}${mm}`;
+  }
+
+  function collectSaveSnapshot() {
+    // Fortschritt aus Speicherstruktur zusammenstellen
+    const progress = {
+      balance,
+      playerLevel,
+      playerXP,
+      skillPoints,
+      skills: { ...skills },
+      boxType,
+      unlockedBoxes: Array.from(unlockedBoxes || new Set()),
+      stats: { ...stats },
+      achievementsState: { ...achievementsState },
+      activeBoosts: { ...(typeof activeBoosts === 'object' ? activeBoosts : {}) },
+      permanentUpgrades: { ...(typeof permanentUpgrades === 'object' ? permanentUpgrades : {}) },
+      purchasedItems: Array.from(purchasedItems || new Set()),
+      statUpgradesLevels: { ...(typeof statUpgradesLevels === 'object' ? statUpgradesLevels : {}) },
+      keysInventory: { ...keysInventory },
+      prestigeState: { ...(typeof prestigeState === 'object' ? prestigeState : { level: 0 }) }
+    };
+
+    const counts = { ...itemCounts };
+    const discovered = Array.from(discoveredItems);
+    const discoveredKeys = Array.from(discoveredKeyRarities || new Set());
+
+    // Settings
+    const soundSettings = { muted: !!isMuted, volume: Number(globalVolume || 0) };
+    const dev = !!devMode;
+    const keysBadgesCollapsed = !!__keysBadgesCollapsed;
+
+    const snapshot = {
+      meta: {
+        app: 'Lootingsimulator',
+        version: (typeof window !== 'undefined' && window.__appVersion) ? window.__appVersion : null,
+        savedAt: new Date().toISOString()
+      },
+      data: {
+        progress,
+        counts,
+        discovered,
+        discoveredKeys,
+        settings: { soundSettings, devMode: dev, keysBadgesCollapsed }
+      }
+    };
+    return snapshot;
+  }
+
+  function downloadJSON(obj, filename) {
+    const json = JSON.stringify(obj, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 0);
+  }
+
+  exportBtn.addEventListener('click', () => {
+    try {
+      const snapshot = collectSaveSnapshot();
+      const fname = `lootingsim-save-${formatTimestamp()}.json`;
+      downloadJSON(snapshot, fname);
+    } catch (e) {
+      alert('Export fehlgeschlagen: ' + (e && e.message ? e.message : e));
+    }
+  });
+
+  importBtn.addEventListener('click', () => {
+    importFile.value = '';
+    importFile.click();
+  });
+
+  importFile.addEventListener('change', () => {
+    const file = importFile.files && importFile.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = String(reader.result || '');
+        const parsed = JSON.parse(text);
+        if (!parsed || !parsed.data) throw new Error('Ungültiges Save-Format');
+        const d = parsed.data;
+
+        // Minimal-Validierung
+        if (!d.progress || !d.counts) throw new Error('Datenfelder fehlen (progress/counts)');
+
+        // In localStorage schreiben (nutzt bestehende Ladepfade beim Reload)
+        try {
+          localStorage.setItem('lootsim_itemCounts_v1', JSON.stringify(d.counts));
+          localStorage.setItem('lootsim_progress_v1', JSON.stringify(d.progress));
+          if (Array.isArray(d.discoveredKeys)) {
+            localStorage.setItem('lootsim_keyDiscovery_v1', JSON.stringify(d.discoveredKeys));
+          }
+          if (d.settings && d.settings.soundSettings) {
+            localStorage.setItem('soundSettings', JSON.stringify(d.settings.soundSettings));
+          }
+          if (d.settings && typeof d.settings.devMode === 'boolean') {
+            localStorage.setItem('lootsim_devMode_v1', d.settings.devMode ? '1' : '0');
+          }
+          if (d.settings && typeof d.settings.keysBadgesCollapsed === 'boolean') {
+            localStorage.setItem('lootsim_keysBadgesCollapsed_v1', d.settings.keysBadgesCollapsed ? '1' : '0');
+          }
+          // Prestige-State ist Teil von progress und wird über PROGRESS_KEY übernommen
+        } catch (e) {
+          console.warn('Konnte nicht in localStorage schreiben', e);
+          throw e;
+        }
+
+        // Sanfter Reload, damit alle Strukturen korrekt initialisiert werden
+        location.reload();
+      } catch (e) {
+        alert('Import fehlgeschlagen: ' + (e && e.message ? e.message : e));
+      }
+    };
+    reader.onerror = () => alert('Datei konnte nicht gelesen werden.');
+    reader.readAsText(file, 'utf-8');
   });
 })();

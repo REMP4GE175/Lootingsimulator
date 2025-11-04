@@ -64,20 +64,24 @@
     <!-- Box-Auswahl unter dem Lootcontainer und über dem Open-Button -->
     <div id="boxSelectionWrapper">
       <div id="boxSelection">
-        <button id="boxBtn1" data-box="Box#1">🗄️ Schublade (Free)</button>
-        <button id="boxBtn2" data-box="Box#2">🎒 Sporttasche (1K 💰)</button>
-        <button id="boxBtn3" data-box="Box#3">💼 Koffer (10K 💰)</button>
-        <button id="boxBtn4" data-box="Box#4">📦 Holzkiste (100K 💰)</button>
-        <button id="boxBtn5" data-box="Box#5">🎖️ Militärkoffer (250K 💰)</button>
-        <button id="boxBtn6" data-box="Box#6">🔒 Safe (500K 💰)</button>
-        <button id="boxBtn7" data-box="Box#7">🏦 Tresor (1M 💰)</button>
-        <button id="boxBtn8" data-box="Testbox">🧪 Testbox (DEV)</button>
+  <button id="boxBtn1" data-box="Box#1">Schublade<br><small>(Free)</small></button>
+  <button id="boxBtn2" data-box="Box#2">Sporttasche<br><small>(1K 💰)</small></button>
+  <button id="boxBtn3" data-box="Box#3">Koffer<br><small>(10K 💰)</small></button>
+  <button id="boxBtn4" data-box="Box#4">Holzkiste<br><small>(100K 💰)</small></button>
+  <button id="boxBtn5" data-box="Box#5">Militärkoffer<br><small>(250K 💰)</small></button>
+  <button id="boxBtn6" data-box="Box#6">Safe<br><small>(500K 💰)</small></button>
+  <button id="boxBtn7" data-box="Box#7">Tresor<br><small>(1M 💰)</small></button>
+  <button id="boxBtn8" data-box="Testbox">Testbox<br><small>(DEV)</small></button>
       </div>
       <div id="iconButtons">
         <button id="achievementsBtn" title="Erfolge">🏆</button>
         <button id="statsBtn" title="Statistiken">📊</button>
         <button id="collectionBtn" title="Sammlung">📚</button>
         <button id="devMoneyBtn" title="DEV: +1M 💰">💸</button>
+        <!-- Export/Import Spielstand -->
+        <button id="exportBtn" title="Spielstand exportieren">⬇️</button>
+        <button id="importBtn" title="Spielstand importieren">⬆️</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none" />
       </div>
         <div id="devToggleWrapper">
           <label class="toggle-dev">
@@ -95,14 +99,22 @@
 <!-- Level & XP Display -->
 <div id="levelDisplay">
   <div id="levelInfo">
-    <span id="playerLevel">Level 1</span>
+    <span id="levelLeft"><span id="playerLevel">Level 1</span></span>
     <span id="playerTitle">Anfänger</span>
   </div>
   <div id="xpBarContainer">
     <div id="xpBar"></div>
     <span id="xpText">0 / 500 XP</span>
   </div>
-  <button id="skillsBtn">⚡ Skills (<span id="skillPointsDisplay">0</span>)</button>
+  <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+    <button id="skillsBtn">⚡ Skills (<span id="skillPointsDisplay">0</span>)</button>
+    <button id="prestigeBtn" title="Meta-Boni & Reset" aria-label="Meta-Boni & Reset">
+      <span class="prestige-star" title="Prestige-Stufe">
+        <span class="star">⭐</span>
+        <span class="num">0</span>
+      </span>
+    </button>
+  </div>
 </div>
 
 <!-- Skill Tree Modal -->
@@ -174,6 +186,21 @@
   <button id="closeCollectionBtn">❌</button>
   <div id="collectionGrid" class="grid"></div>
   <button id="resetBtn" class="reset-btn">🔄 Fortschritt zurücksetzen</button>
+</div>
+
+<!-- Prestige Modal -->
+<div id="prestigeModal" style="display:none;" class="overlay">
+  <div class="modal-content skill-modal">
+    <button id="closePrestigeBtn" class="close-btn">❌</button>
+    <h2>✨ Prestige</h2>
+    <div id="prestigeInfo" style="text-align:left; line-height:1.6;">
+      <!-- Inhalte werden per JS gesetzt -->
+    </div>
+    <div style="display:flex; gap:10px; justify-content:center; margin-top:16px;">
+      <button id="confirmPrestigeBtn" class="upgrade-btn">Jetzt prestigen</button>
+    </div>
+  </div>
+  
 </div>
 
   
