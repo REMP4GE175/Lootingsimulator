@@ -630,15 +630,19 @@ body {
 
 .rarity-section .locked {
   filter: brightness(0);
+  background-color: #222 !important;
+  position: relative;
 }
 
 .rarity-section .locked::after {
   content: "❓";
   position: absolute;
-  top: 30%;
-  left: 40%;
-  font-size: 24px;
-  color: white;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 32px;
+  color: rgba(255, 255, 255, 0.7);
+  pointer-events: none;
 }
 
 /* Transparente Farben für Raritäten */
