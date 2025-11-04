@@ -380,7 +380,7 @@ const itemPools = {
     { name: "Schlüssel: Selten", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen seltenen Raum mit Rare-lastigen Loot.", isKey: true, dropWeight: 0.6 },
     { name: "Silber Ring", icon: "Itembilder/Selten/Silber Ring.png", value: 120, description: "Ein hübscher Ring mit leichtem Glanz." },
     { name: "Schatzkarte", icon: "Itembilder/Selten/Map.png", value: 250, description: "Zeigt vergessene Wege." },
-  { name: "Schachtel Zigaretten", icon: "Itembilder/Selten/zigaretten.png", value: 180, description: "\"Mit dem Rauchen aufzuhören ist kinderleicht. Ich habe es schon hundert Mal gemacht.\"", quoteAuthor: "Mark Twain" },
+    { name: "Schachtel Zigaretten", icon: "Itembilder/Selten/zigaretten.png", value: 180, description: "\"Mit dem Rauchen aufzuhören ist kinderleicht. Ich habe es schon hundert Mal gemacht.\"", quoteAuthor: "Mark Twain" },
     { name: "Kartenspiel", icon: "Itembilder/Selten/Kartenspiel.png", value: 150, description: "Ein klassisches Deck mit aufwendigem Design." },
     { name: "Vintage-Feuerzeug", icon: "Itembilder/Selten/Feuerzeug.png", value: 140, description: "Ein Zippo mit eingraviertem Datum." },
     { name: "Alte Armbanduhr", icon: "Itembilder/Selten/Armbanduhr.png", value: 200, description: "Mechanisch, läuft noch präzise." },
@@ -392,10 +392,10 @@ const itemPools = {
     { name: "Taschenlampe (LED)", icon: "Itembilder/Selten/Taschenlampe.png", value: 120, description: "Extrem hell, militärische Qualität." },
     { name: "Multimeter", icon: "Itembilder/Selten/Multimeter.png", value: 150, description: "Für alle elektronischen Messungen." },
     { name: "Taschenuhr", icon: "Itembilder/Selten/Taschenuhr.png", value: 260, description: "Goldüberzogen, mit Kette." },
-  { name: "Silberkette", icon: "Itembilder/Selten/Silberkette.png", value: 180, description: "Fein gearbeitet, leicht angelaufen." },
-  { name: "Netzteil", icon: "Itembilder/Selten/Netzteil.png", value: 170, description: "Universalnetzteil, liefert zuverlässig Strom." },
+    { name: "Silberkette", icon: "Itembilder/Selten/Silberkette.png", value: 180, description: "Fein gearbeitet, leicht angelaufen." },
+    { name: "Netzteil", icon: "Itembilder/Selten/Netzteil.png", value: 170, description: "Universalnetzteil, liefert zuverlässig Strom." },
     { name: "Brosche", icon: "Itembilder/Selten/Brosche.png", value: 160, description: "Mit kleinem Edelstein verziert." },
-    { name: "Holz-Spielzeug", icon: "Itembilder/Selten/Holz-Spielzeug.png", value: 200, description: "Ein Blechroboter aus den 70ern." },
+    { name: "Holz-Spielzeug", icon: "Itembilder/Selten/Holz-Spielzeug.png", value: 200, description: "Ein Andenken an einfachere Zeiten." },
     { name: "Postkarten-Sammlung", icon: "Itembilder/Selten/Postkarten.png", value: 140, description: "Aus aller Welt, teilweise frankiert." },
     { name: "Comic Heft", icon: "Itembilder/Selten/Comic.png", value: 190, description: "Erste Ausgabe, leicht vergilbt." },
     { name: "USB-Stick", icon: "Itembilder/Selten/USB.png", value: 120, description: "8GB, mit alten Fotos." },
@@ -1176,8 +1176,28 @@ function renderQuickslots() {
   }
 }
 
-// Suche-Animation entfernt – Stubs für Kompatibilität
-function setSearchingState(active) { /* no-op */ }
+// Sound-Instanz für das Durchsuchen
+let searchingSound = null;
+
+// Suche-Animation: spielt Sound beim Durchsuchen ab
+function setSearchingState(active) {
+  if (active) {
+    // Starte Sound
+    if (!searchingSound) {
+      searchingSound = new Audio('Sounds/searching.mp3');
+      searchingSound.loop = false; // Kein Loop, spielt nur einmal
+      searchingSound.volume = 0.5; // 50% Lautstärke
+    }
+    searchingSound.currentTime = 0; // Von vorne starten
+    searchingSound.play().catch(e => console.warn('Sound konnte nicht abgespielt werden:', e));
+  } else {
+    // Stoppe Sound
+    if (searchingSound) {
+      searchingSound.pause();
+      searchingSound.currentTime = 0;
+    }
+  }
+}
 function updateChestTheme(forBoxType) { /* no-op */ }
 function createRummageParticle() { /* no-op */ }
 function startRummageParticles() { /* no-op */ }
