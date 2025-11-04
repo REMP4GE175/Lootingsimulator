@@ -2390,8 +2390,8 @@ dom.openBtn.addEventListener('click', async () => {
           iconImg.src = getItemImagePath(nextIcon, pulledItem.rarity);
         } else {
           iconImg.onerror = null;
-          // Nutze eine neutrale Platzhalter-Grafik aus Common, um 404-Bilder zu vermeiden
-          iconImg.src = 'Itembilder/Common/Leere Karte.png';
+          // Nutze eine neutrale Platzhalter-Grafik aus Common (mit korrekter URL-Encoding)
+          iconImg.src = getItemImagePath('Leere Karte.png', 'Common');
         }
       };
     }
@@ -3274,8 +3274,8 @@ function showCollection() {
           } else {
             // Einfaches SVG mit Fragezeichen als Data-URL
             img.onerror = null; // Verhindere Loop
-            // Neutrale Platzhalter-Grafik statt 404 oder SVG
-            img.src = 'Itembilder/Common/Leere Karte.png';
+            // Neutrale Platzhalter-Grafik statt 404 oder SVG (mit korrekter URL-Encoding)
+            img.src = getItemImagePath('Leere Karte.png', 'Common');
           }
         };
       }
