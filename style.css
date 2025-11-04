@@ -475,6 +475,24 @@ body {
   color: #f39c12;
 }
 
+/* Achievements: einklappbare Sektionen */
+.ach-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.ach-section-header .ach-toggle {
+  background: transparent;
+  border: none;
+  color: #f39c12;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.ach-section-body { margin-top: 8px; }
+
 .stat-item {
   display: flex;
   justify-content: space-between;

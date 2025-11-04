@@ -129,13 +129,17 @@ const stats = {
   boxOpenCounts: {
     'Box#1': 0, 'Box#2': 0, 'Box#3': 0, 'Box#4': 0,
     'Box#5': 0, 'Box#6': 0, 'Box#7': 0
-  }
+  },
+  // Kumulativ gefundene Schlüssel (nicht Inventarbestand)
+  keysFoundCounts: { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 }
 };
 
 // Erfolge: Kategorien und Meilensteine
 const BOX_MILESTONES = [50, 100, 200, 1000];
 const GOLD_MILESTONES = [1000, 10000, 100000, 1000000];
 const COLLECTION_MILESTONES_PCT = [25, 50, 75, 100]; // Prozent der Items je Rarität
+// Schlüssel-Erfolge: nur einmal finden pro Rarität
+const KEY_MILESTONES = [1];
 
 // Zustand: welche Meilensteine je Kategorie wurden bereits "gesehen"
 let achievementsState = {
@@ -144,7 +148,9 @@ let achievementsState = {
     gold: 0,                 // höchster erreichten Gold-Meilenstein (Betrag)
     collection: {            // pro Rarität: höchster Prozent-Meilenstein (0/25/50/75/100)
       Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0
-    }
+    },
+    // pro Rarität: höchster erreichten Schlüssel-Meilenstein (Anzahl)
+    keys: { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 }
   }
 };
 
@@ -393,7 +399,7 @@ const itemPools = {
     { name: "Postkarten-Sammlung", icon: "postkarten.png", value: 140, description: "Aus aller Welt, teilweise frankiert." },
     { name: "Comic-Heft", icon: "comic.png", value: 190, description: "Erste Ausgabe, leicht vergilbt." },
     { name: "USB-Stick", icon: "usb.png", value: 120, description: "8GB, mit alten Fotos." },
-    { name: "Kopfhörer", icon: "kopfhoerer.png", value: 150, description: "Over-Ear, noch funktionsfähig." },
+    { name: "Kopfhörer", icon: "kopfhörer.png", value: 150, description: "Over-Ear, noch funktionsfähig." },
     { name: "Wecker (Analog)", icon: "wecker.png", value: 140, description: "Mit lautem Klingeln." },
     { name: "Taschenrechner", icon: "taschenrechner.png", value: 110, description: "Solar-betrieben, funktioniert noch." },
     { name: "Zange", icon: "zange.png", value: 180, description: "Kombinationszange in gutem Zustand." },
@@ -2004,16 +2010,19 @@ function loadProgress() {
     if (progress.achievementsState) {
       // Migration: altes seenMax -> neues Schema
       if (typeof progress.achievementsState.seenMax === 'number') {
-        achievementsState.seen = achievementsState.seen || { boxes: 0, gold: 0, collection: { Common:0,Rare:0,Epic:0,Legendary:0,Mythisch:0 } };
+        achievementsState.seen = achievementsState.seen || { boxes: 0, gold: 0, collection: { Common:0,Rare:0,Epic:0,Legendary:0,Mythisch:0 }, keys: { Common:0,Rare:0,Epic:0,Legendary:0,Mythisch:0 } };
         achievementsState.seen.boxes = Math.max(achievementsState.seen.boxes || 0, progress.achievementsState.seenMax || 0);
       }
       if (progress.achievementsState.seen) {
         const seen = progress.achievementsState.seen;
-        achievementsState.seen = achievementsState.seen || { boxes: 0, gold: 0, collection: { Common:0,Rare:0,Epic:0,Legendary:0,Mythisch:0 } };
+        achievementsState.seen = achievementsState.seen || { boxes: 0, gold: 0, collection: { Common:0,Rare:0,Epic:0,Legendary:0,Mythisch:0 }, keys: { Common:0,Rare:0,Epic:0,Legendary:0,Mythisch:0 } };
         if (typeof seen.boxes === 'number') achievementsState.seen.boxes = seen.boxes;
         if (typeof seen.gold === 'number') achievementsState.seen.gold = seen.gold;
         if (seen.collection && typeof seen.collection === 'object') {
           achievementsState.seen.collection = { Common:0,Rare:0,Epic:0,Legendary:0,Mythisch:0, ...seen.collection };
+        }
+        if (seen.keys && typeof seen.keys === 'object') {
+          achievementsState.seen.keys = { Common:0,Rare:0,Epic:0,Legendary:0,Mythisch:0, ...seen.keys };
         }
       }
     }
@@ -2427,9 +2436,14 @@ dom.openBtn.addEventListener('click', async () => {
       if (floatingLupe.parentElement) floatingLupe.parentElement.removeChild(floatingLupe);
     }
 
-    // Wenn es ein Schlüssel ist: in Inventar buchen und UI aktualisieren (nach Reveal)
+    // Wenn es ein Schlüssel ist: in Inventar buchen, Statistik erhöhen und UI aktualisieren (nach Reveal)
     if (pulledItem.isKey) {
       const r = pulledItem.rarity || 'Common';
+      // Kumulativen Schlüssel-Fund zählen
+      try {
+        if (!stats.keysFoundCounts) stats.keysFoundCounts = { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 };
+        stats.keysFoundCounts[r] = (stats.keysFoundCounts[r] || 0) + 1;
+      } catch (_) { /* ignore */ }
       keysInventory[r] = (keysInventory[r] || 0) + 1;
       saveProgress();
       // Schlüssel-Rarität als entdeckt markieren
@@ -3171,12 +3185,15 @@ function resetProgress() {
   for (let key in stats.boxOpenCounts) {
     stats.boxOpenCounts[key] = 0;
   }
+  // Schlüssel-Fundstatistiken zurücksetzen
+  stats.keysFoundCounts = { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 };
   // Erfolge zurücksetzen
   achievementsState = {
     seen: {
       boxes: 0,
       gold: 0,
-      collection: { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 }
+      collection: { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 },
+      keys: { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 }
     }
   };
   
@@ -3340,6 +3357,15 @@ function collectionMaxMilestoneReached(rarity) {
   return max;
 }
 
+function keysMaxMilestoneReachedForRarity(rarity) {
+  const count = (stats.keysFoundCounts && typeof stats.keysFoundCounts[rarity] === 'number')
+    ? stats.keysFoundCounts[rarity]
+    : 0;
+  let max = 0;
+  for (const m of KEY_MILESTONES) { if (count >= m && m > max) max = m; }
+  return max;
+}
+
 function setAchievementsNotify(active) {
   const btn = dom.achievementsBtn;
   if (!btn) return;
@@ -3357,13 +3383,16 @@ function setAchievementsNotify(active) {
 
 function updateAchievementsNotify() {
   try {
-    const seen = achievementsState?.seen || { boxes: 0, gold: 0, collection: {} };
+    const seen = achievementsState?.seen || { boxes: 0, gold: 0, collection: {}, keys: {} };
     const boxMax = boxesMaxMilestoneReached();
     const goldMax = goldMaxMilestoneReached();
     const colMaxes = rarities.map(r => collectionMaxMilestoneReached(r));
     const colSeen = rarities.map(r => (seen.collection?.[r] || 0));
     const anyColUnseen = colMaxes.some((m, idx) => m > colSeen[idx]);
-    const unseen = (boxMax > (seen.boxes || 0)) || (goldMax > (seen.gold || 0)) || anyColUnseen;
+    const keyMaxes = rarities.map(r => keysMaxMilestoneReachedForRarity(r));
+    const keySeen = rarities.map(r => ((seen.keys && seen.keys[r]) || 0));
+    const anyKeyUnseen = keyMaxes.some((m, idx) => m > keySeen[idx]);
+    const unseen = (boxMax > (seen.boxes || 0)) || (goldMax > (seen.gold || 0)) || anyColUnseen || anyKeyUnseen;
     setAchievementsNotify(unseen);
   } catch (_) {
     // Fallback: nur Boxen prüfen
@@ -3375,6 +3404,23 @@ function updateAchievementsNotify() {
 
 function showAchievements() {
   if (!dom.achievementsOverlay || !dom.achievementsContent) return;
+
+  // Persistente Ein-/Ausklapp-States
+  const ACH_COLLAPSE_KEY = 'lootsim_achCollapse_v1';
+  let achCollapse = { boxes: false, collection: false, gold: false, keys: false };
+  function loadAchCollapse() {
+    try {
+      const raw = localStorage.getItem(ACH_COLLAPSE_KEY);
+      if (raw) {
+        const obj = JSON.parse(raw);
+        if (obj && typeof obj === 'object') achCollapse = { ...achCollapse, ...obj };
+      }
+    } catch (_) { /* ignore */ }
+  }
+  function saveAchCollapse() {
+    try { localStorage.setItem(ACH_COLLAPSE_KEY, JSON.stringify(achCollapse)); } catch (_) {}
+  }
+  loadAchCollapse();
 
   // Kategorie: Boxen
   const opened = stats.totalBoxesOpened || 0;
@@ -3416,26 +3462,65 @@ function showAchievements() {
     `;
   }).join('');
 
+  // Kategorie: Schlüssel (pro Rarität)
+  const keysSection = rarities.map(r => {
+    const count = (stats.keysFoundCounts && stats.keysFoundCounts[r]) || 0;
+    const entries = KEY_MILESTONES.map(m => {
+      const done = count >= m;
+      const progressPct = Math.min(100, Math.round((count / m) * 100));
+      return `
+        <div class="stat-item">
+          <span class="stat-label">${displayRarityName(r)}: ${m.toLocaleString('de-DE')} Schlüssel</span>
+          <span class="stat-value">${done ? '✅ Erreicht' : `${count.toLocaleString('de-DE')} / ${m.toLocaleString('de-DE')}`}</span>
+        </div>
+        <div class="progress-bar-container"><div class="progress-bar" style="width:${progressPct}%"></div></div>
+      `;
+    }).join('');
+    return entries;
+  }).join('');
+
   dom.achievementsContent.innerHTML = `
-    <div class="stats-section">
-      <h3>📦 Boxen</h3>
-      ${boxItems}
+    <div class="stats-section" data-sec="boxes">
+      <h3 class="ach-section-header" data-sec="boxes"><button class="ach-toggle" aria-label="Ein-/ausklappen">▾</button> 📦 Boxen</h3>
+      <div class="ach-section-body" data-sec="boxes">${boxItems}</div>
     </div>
-    <div class="stats-section">
-      <h3>📚 Sammlung (pro Rarität)</h3>
-      ${collectionSection}
+    <div class="stats-section" data-sec="collection">
+      <h3 class="ach-section-header" data-sec="collection"><button class="ach-toggle" aria-label="Ein-/ausklappen">▾</button> 📚 Sammlung (pro Rarität)</h3>
+      <div class="ach-section-body" data-sec="collection">${collectionSection}</div>
     </div>
-    <div class="stats-section">
-      <h3>💰 Gold</h3>
-      ${goldItems}
+    <div class="stats-section" data-sec="gold">
+      <h3 class="ach-section-header" data-sec="gold"><button class="ach-toggle" aria-label="Ein-/ausklappen">▾</button> 💰 Gold</h3>
+      <div class="ach-section-body" data-sec="gold">${goldItems}</div>
+    </div>
+    <div class="stats-section" data-sec="keys">
+      <h3 class="ach-section-header" data-sec="keys"><button class="ach-toggle" aria-label="Ein-/ausklappen">▾</button> 🔑 Schlüssel</h3>
+      <div class="ach-section-body" data-sec="keys">${keysSection}</div>
     </div>
   `;
+
+  // Collapse-Handler einrichten
+  function applyCollapseState(secId) {
+    const body = dom.achievementsContent.querySelector(`.ach-section-body[data-sec="${secId}"]`);
+    const headerBtn = dom.achievementsContent.querySelector(`.ach-section-header[data-sec="${secId}"] .ach-toggle`);
+    const collapsed = !!achCollapse[secId];
+    if (body) body.style.display = collapsed ? 'none' : '';
+    if (headerBtn) headerBtn.textContent = collapsed ? '▸' : '▾';
+  }
+  ['boxes','collection','gold','keys'].forEach(sec => applyCollapseState(sec));
+  dom.achievementsContent.querySelectorAll('.ach-section-header').forEach(h => {
+    h.addEventListener('click', () => {
+      const sec = h.getAttribute('data-sec');
+      achCollapse[sec] = !achCollapse[sec];
+      saveAchCollapse();
+      applyCollapseState(sec);
+    });
+  });
 
   dom.achievementsOverlay.style.display = 'block';
 
   // Als gesehen markieren (höchsten erreichten Meilensteine in allen Kategorien)
   try {
-    const seen = achievementsState.seen || { boxes: 0, gold: 0, collection: {} };
+    const seen = achievementsState.seen || { boxes: 0, gold: 0, collection: {}, keys: {} };
     const boxMax = boxesMaxMilestoneReached();
     const goldMax = goldMaxMilestoneReached();
     const colSeen = seen.collection || {};
@@ -3444,10 +3529,17 @@ function showAchievements() {
       const m = collectionMaxMilestoneReached(r);
       newColSeen[r] = Math.max(m, newColSeen[r] || 0);
     }
+    const keySeen = seen.keys || {};
+    const newKeySeen = { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0, ...keySeen };
+    for (const r of rarities) {
+      const km = keysMaxMilestoneReachedForRarity(r);
+      newKeySeen[r] = Math.max(newKeySeen[r] || 0, km);
+    }
     achievementsState.seen = {
       boxes: Math.max(seen.boxes || 0, boxMax),
       gold: Math.max(seen.gold || 0, goldMax),
-      collection: newColSeen
+      collection: newColSeen,
+      keys: newKeySeen
     };
   } catch (_) {
     // Kompatibilität mit alten Saves
