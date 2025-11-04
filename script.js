@@ -3424,6 +3424,8 @@ function showAchievements() {
 
   // Kategorie: Boxen
   const opened = stats.totalBoxesOpened || 0;
+  const boxMaxTarget = BOX_MILESTONES[BOX_MILESTONES.length - 1] || 1;
+  const boxPctOverall = Math.min(100, Math.round((opened / boxMaxTarget) * 100));
   const boxItems = BOX_MILESTONES.map(m => {
     const done = opened >= m;
     const progressPct = Math.min(100, Math.round((opened / m) * 100));
@@ -3437,6 +3439,9 @@ function showAchievements() {
   }).join('');
 
   // Kategorie: Sammlung (pro Rarität)
+  const totalItemsAll = rarities.reduce((sum, r) => sum + ((itemPools[r] || []).length), 0);
+  const discoveredCountAll = rarities.reduce((sum, r) => sum + ((itemPools[r] || []).filter(it => discoveredItems.has(it.name)).length), 0);
+  const collectionPctOverall = totalItemsAll > 0 ? Math.round((discoveredCountAll / totalItemsAll) * 100) : 0;
   const collectionSection = rarities.map(r => {
     const pct = collectionPercentForRarity(r);
     return `
@@ -3450,6 +3455,8 @@ function showAchievements() {
 
   // Kategorie: Gold
   const earned = stats.totalGoldEarned || 0;
+  const goldMaxTarget = GOLD_MILESTONES[GOLD_MILESTONES.length - 1] || 1;
+  const goldPctOverall = Math.min(100, Math.round((earned / goldMaxTarget) * 100));
   const goldItems = GOLD_MILESTONES.map(m => {
     const done = earned >= m;
     const progressPct = Math.min(100, Math.round((earned / m) * 100));
@@ -3478,22 +3485,24 @@ function showAchievements() {
     }).join('');
     return entries;
   }).join('');
+  const keysCompletedRarities = rarities.filter(r => ((stats.keysFoundCounts && stats.keysFoundCounts[r]) || 0) >= 1).length;
+  const keysPctOverall = Math.round((keysCompletedRarities / Math.max(1, rarities.length)) * 100);
 
   dom.achievementsContent.innerHTML = `
     <div class="stats-section" data-sec="boxes">
-      <h3 class="ach-section-header" data-sec="boxes"><button class="ach-toggle" aria-label="Ein-/ausklappen">▾</button> 📦 Boxen</h3>
+      <h3 class="ach-section-header" data-sec="boxes"><button class="ach-toggle" aria-label="Ein-/ausklappen">▾</button> 📦 Boxen <span class="ach-percent">${boxPctOverall}%</span></h3>
       <div class="ach-section-body" data-sec="boxes">${boxItems}</div>
     </div>
     <div class="stats-section" data-sec="collection">
-      <h3 class="ach-section-header" data-sec="collection"><button class="ach-toggle" aria-label="Ein-/ausklappen">▾</button> 📚 Sammlung (pro Rarität)</h3>
+      <h3 class="ach-section-header" data-sec="collection"><button class="ach-toggle" aria-label="Ein-/ausklappen">▾</button> 📚 Sammlung (pro Rarität) <span class="ach-percent">${collectionPctOverall}%</span></h3>
       <div class="ach-section-body" data-sec="collection">${collectionSection}</div>
     </div>
     <div class="stats-section" data-sec="gold">
-      <h3 class="ach-section-header" data-sec="gold"><button class="ach-toggle" aria-label="Ein-/ausklappen">▾</button> 💰 Gold</h3>
+      <h3 class="ach-section-header" data-sec="gold"><button class="ach-toggle" aria-label="Ein-/ausklappen">▾</button> 💰 Gold <span class="ach-percent">${goldPctOverall}%</span></h3>
       <div class="ach-section-body" data-sec="gold">${goldItems}</div>
     </div>
     <div class="stats-section" data-sec="keys">
-      <h3 class="ach-section-header" data-sec="keys"><button class="ach-toggle" aria-label="Ein-/ausklappen">▾</button> 🔑 Schlüssel</h3>
+      <h3 class="ach-section-header" data-sec="keys"><button class="ach-toggle" aria-label="Ein-/ausklappen">▾</button> 🔑 Schlüssel <span class="ach-percent">${keysPctOverall}%</span></h3>
       <div class="ach-section-body" data-sec="keys">${keysSection}</div>
     </div>
   `;

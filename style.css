@@ -492,6 +492,12 @@ body {
   padding: 0 4px;
 }
 .ach-section-body { margin-top: 8px; }
+/* Prozentanzeige rechts im Header */
+.ach-section-header .ach-percent {
+  margin-left: auto;
+  color: #bdc3c7;
+  font-weight: 700;
+}
 
 .stat-item {
   display: flex;
