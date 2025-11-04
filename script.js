@@ -1072,16 +1072,32 @@ dom.prestigeInfo = document.getElementById('prestigeInfo');
 function ensureQuickslotsContainer() {
   const parent = document.getElementById('actionButtons');
   if (!parent) return null;
+  // Stelle sicher, dass es einen linken Wrapper gibt, der Quickslots und Shop-Button enthält
+  let leftWrap = document.getElementById('leftActions');
+  if (!leftWrap) {
+    leftWrap = document.createElement('div');
+    leftWrap.id = 'leftActions';
+    leftWrap.className = 'left-actions';
+    if (dom.shopBtn && dom.shopBtn.parentElement === parent) {
+      parent.insertBefore(leftWrap, dom.shopBtn);
+    } else {
+      parent.prepend(leftWrap);
+    }
+  }
+  // Shop-Button in den Wrapper verschieben (links), falls noch nicht
+  if (dom.shopBtn && dom.shopBtn.parentElement !== leftWrap) {
+    leftWrap.appendChild(dom.shopBtn);
+  }
   let qs = document.getElementById('quickslots');
   if (!qs) {
     qs = document.createElement('div');
     qs.id = 'quickslots';
     qs.className = 'quickslots';
-    // Standardposition: links vom Shop-Button
-    if (dom.shopBtn && dom.shopBtn.parentElement === parent) {
-      parent.insertBefore(qs, dom.shopBtn);
+    // Standardposition: links vom Shop-Button, beide im gleichen Wrapper
+    if (dom.shopBtn && dom.shopBtn.parentElement === leftWrap) {
+      leftWrap.insertBefore(qs, dom.shopBtn);
     } else {
-      parent.prepend(qs);
+      leftWrap.prepend(qs);
     }
   }
   return qs;

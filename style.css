@@ -124,10 +124,8 @@ body {
 }
 
 /* Linke Seite: Shop + Quickslots */
-#shopBtn, .quickslots {
-  grid-column: 1;
-  justify-self: end;
-}
+#leftActions { grid-column: 1; justify-self: end; display: inline-flex; align-items: center; gap: 8px; }
+#shopBtn { /* Falls kein Wrapper existiert (vor Quickslots), weiterhin links platzieren */ grid-column: 1; justify-self: end; }
 
 /* Mitte: Öffnen-Button */
 #openBtn {
