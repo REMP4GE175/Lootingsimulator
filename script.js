@@ -132,6 +132,13 @@ const stats = {
   }
 };
 
+// Einfache Erfolge: Meilensteine für geöffnete Boxen
+const ACHIEVEMENT_MILESTONES = [50, 100, 200, 1000];
+// Zustand: größter bereits "gesehener" Meilenstein, um Benachrichtigungs-Punkt zu steuern
+let achievementsState = {
+  seenMax: 0
+};
+
 // Titel-System: Level → Titel
 const titles = [
   { level: 0, title: "little Timmy" },
@@ -350,14 +357,13 @@ const itemPools = {
     { name: "Plastiktüte", icon: "Plastiktüte.png", value: 4, description: "Vom Supermarkt, mehrfach verwendet." },
     { name: "Büroklammer", icon: "Büroklammer.png", value: 6, description: "Eine verbogene Metallklammer." },
     { name: "Radiergummi", icon: "Radiergummi.png", value: 9, description: "Hart und brüchig geworden." },
-    { name: "Reißzwecke", icon: "common_1.png", value: 6, description: "Immer noch spitz." },
-    { name: "Zahnstocher", icon: "common_1.png", value: 3, description: "Eine Handvoll Holzstäbchen." },
-    { name: "Schallplattenhülle", icon: "plattenhuelle.png", value: 25, description: "Ohne Platte, aber mit Artwork." }
+    { name: "Reißzwecke", icon: "Reißzwecke.png", value: 6, description: "Immer noch spitz." },
+    { name: "Zahnstocher", icon: "Zahnstocher.png", value: 3, description: "Eine Handvoll Holzstäbchen." },
   ],
   Rare: [
     // Schlüssel (Rare) – seltener als Common-Schlüssel
     { name: "Schlüssel: Selten", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen seltenen Raum mit Rare-lastigen Loot.", isKey: true, dropWeight: 0.04 },
-    { name: "Silver Ring", icon: "silver_ring.png", value: 120, description: "Ein hübscher Ring mit leichtem Glanz." },
+    { name: "Silber Ring", icon: "silver_ring.png", value: 120, description: "Ein hübscher Ring mit leichtem Glanz." },
     { name: "Traveler's Map", icon: "map.png", value: 250, description: "Zeigt vergessene Wege." },
     { name: "Schachtel Zigaretten", icon: "zigaretten.png", value: 180, description: "Eine volle Packung, noch original verschweißt." },
     { name: "Kartenspiel", icon: "kartenspiel.png", value: 150, description: "Ein klassisches Deck mit aufwendigem Design." },
@@ -1009,6 +1015,11 @@ const dom = {
   statsOverlay: document.getElementById('statsOverlay'),
   statsContent: document.getElementById('statsContent'),
   closeStatsBtn: document.getElementById('closeStatsBtn'),
+  // Achievements UI
+  achievementsBtn: document.getElementById('achievementsBtn'),
+  achievementsOverlay: document.getElementById('achievementsOverlay'),
+  achievementsContent: document.getElementById('achievementsContent'),
+  closeAchievementsBtn: document.getElementById('closeAchievementsBtn'),
   resetBtn: document.getElementById('resetBtn'),
   // Level & Skills UI
   playerLevel: document.getElementById('playerLevel'),
@@ -1945,6 +1956,7 @@ function saveProgress() {
       boxType,
       unlockedBoxes: Array.from(unlockedBoxes),
       stats: { ...stats },
+      achievementsState: { ...achievementsState },
       activeBoosts: { ...activeBoosts },
       permanentUpgrades: { ...permanentUpgrades },
       purchasedItems: Array.from(purchasedItems),
@@ -1979,6 +1991,9 @@ function loadProgress() {
     }
     if (progress.stats) {
       Object.assign(stats, progress.stats);
+    }
+    if (progress.achievementsState) {
+      Object.assign(achievementsState, progress.achievementsState);
     }
     if (progress.activeBoosts) {
       Object.assign(activeBoosts, progress.activeBoosts);
@@ -2020,6 +2035,8 @@ loadKeysBadgesCollapsed();
 loadKeyDiscovery();
 // Initial Quickslots-Render (falls Gürtel bereits vorhanden)
 renderQuickslots();
+// Initial: Achievements-Benachrichtigung prüfen
+updateAchievementsNotify();
 
 // Helper: Erzeugt Slots im Container und gibt Array zurück
 function buildSlots(container, totalSlots) {
@@ -2169,6 +2186,8 @@ dom.openBtn.addEventListener('click', async () => {
   stats.totalBoxesOpened++;
   stats.boxOpenCounts[openBoxType]++;
   stats.totalItemsPulled += itemCount;
+  // Prüfe auf neue (ungesehene) Erfolge
+  updateAchievementsNotify();
 
   for (let i = 0; i < revealSlots.length; i++) {
     const { item } = revealSlots[i];
@@ -2451,6 +2470,8 @@ dom.openBtn.addEventListener('click', async () => {
 
   // Icon am Ende nochmals aktualisieren (falls Schlüsselanzahl sich geändert hat)
   updateOpenBtnIcon();
+  // Nach Abschluss erneut prüfen, falls während der Öffnung weitere Boxen gezählt wurden
+  updateAchievementsNotify();
 
   // Falls während der Öffnung eine andere Box gewählt wurde, jetzt anwenden
   if (pendingBoxType) {
@@ -2853,6 +2874,9 @@ if (dom.boxInfoModal) {
 
 // Sammlung-Button
 dom.collectionBtn.addEventListener('click', showCollection);
+// Achievements-Button
+if (dom.achievementsBtn) dom.achievementsBtn.addEventListener('click', showAchievements);
+if (dom.closeAchievementsBtn) dom.closeAchievementsBtn.addEventListener('click', closeAchievements);
 
 // Shop-Button: wie Skills-Overlay toggeln (auf/zu)
 dom.shopBtn.addEventListener('click', () => {
@@ -3125,12 +3149,15 @@ function resetProgress() {
   for (let key in stats.boxOpenCounts) {
     stats.boxOpenCounts[key] = 0;
   }
+  // Erfolge zurücksetzen
+  achievementsState.seenMax = 0;
   
   // UI aktualisieren
   updateLevelUI();
   updateBalance();
   updateSkillDisplay();
   selectBox("Box#1");
+  updateAchievementsNotify();
   
   // Sammlung schließen (falls geöffnet)
   if (dom.collectionOverlay) {
@@ -3254,6 +3281,82 @@ document.getElementById("closeCollectionBtn").addEventListener("click", closeCol
 
 function closeCollection() {
   dom.collectionOverlay.style.display = 'none';
+}
+
+// ======= Achievements (Erfolge) =======
+function currentMaxMilestoneReached() {
+  const opened = stats.totalBoxesOpened || 0;
+  let max = 0;
+  for (const m of ACHIEVEMENT_MILESTONES) {
+    if (opened >= m && m > max) max = m;
+  }
+  return max;
+}
+
+function setAchievementsNotify(active) {
+  const btn = dom.achievementsBtn;
+  if (!btn) return;
+  let dot = btn.querySelector('.ach-notify-dot');
+  if (active) {
+    if (!dot) {
+      dot = document.createElement('span');
+      dot.className = 'ach-notify-dot';
+      btn.appendChild(dot);
+    }
+  } else {
+    if (dot && dot.parentElement) dot.parentElement.removeChild(dot);
+  }
+}
+
+function updateAchievementsNotify() {
+  const maxReached = currentMaxMilestoneReached();
+  const unseen = maxReached > (achievementsState.seenMax || 0);
+  setAchievementsNotify(unseen);
+}
+
+function showAchievements() {
+  if (!dom.achievementsOverlay || !dom.achievementsContent) return;
+  const opened = stats.totalBoxesOpened || 0;
+  const items = ACHIEVEMENT_MILESTONES.map(m => {
+    const done = opened >= m;
+    const progressPct = Math.min(100, Math.round((opened / m) * 100));
+    return `
+      <div class="stat-item">
+        <span class="stat-label">Öffne ${m.toLocaleString('de-DE')} Boxen</span>
+        <span class="stat-value">${done ? '✅ Erreicht' : `${opened.toLocaleString('de-DE')} / ${m.toLocaleString('de-DE')}`}</span>
+      </div>
+      <div class="progress-bar-container"><div class="progress-bar" style="width:${progressPct}%"></div></div>
+    `;
+  }).join('');
+
+  dom.achievementsContent.innerHTML = `
+    <div class="stats-section">
+      <h3>📦 Gesamtfortschritt</h3>
+      <div class="stat-item">
+        <span class="stat-label">Geöffnete Boxen gesamt:</span>
+        <span class="stat-value">${opened.toLocaleString('de-DE')}</span>
+      </div>
+    </div>
+    <div class="stats-section">
+      <h3>🏆 Meilensteine</h3>
+      ${items}
+    </div>
+  `;
+
+  dom.achievementsOverlay.style.display = 'block';
+
+  // Als gesehen markieren (höchsten erreichten Meilenstein)
+  const maxReached = currentMaxMilestoneReached();
+  if (maxReached > (achievementsState.seenMax || 0)) {
+    achievementsState.seenMax = maxReached;
+    saveProgress();
+  }
+  updateAchievementsNotify();
+}
+
+function closeAchievements() {
+  if (!dom.achievementsOverlay) return;
+  dom.achievementsOverlay.style.display = 'none';
 }
 
 // ======= Statistik-Overlay =======
