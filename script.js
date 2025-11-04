@@ -2533,10 +2533,7 @@ dom.openBtn.addEventListener('click', async () => {
   // Statistik: Gold tracken
   stats.totalGoldEarned += roundValue;
   
-  // Prüfe ob Mythisch dabei war für delayed level-up
-  const hadMythisch = revealSlots.some(slot => slot.pulledItem && slot.pulledItem.rarity === 'Mythisch');
-  
-  // XP hinzufügen (Verkaufswert = XP) - mit optionalem Delay für Level-Up-Popup
+  // XP hinzufügen (Verkaufswert = XP)
   // Berücksichtige permanente XP-Boosts und temporäre Boosts aus dem Shop
   let xpGain = roundValue;
   const permXPCount = Math.min(1, (permanentUpgrades.permXPBoost || 0));
@@ -2544,7 +2541,7 @@ dom.openBtn.addEventListener('click', async () => {
   const tempXPMult = (activeBoosts.xpBoostUses > 0) ? (1 + activeBoosts.xpBoost) : 1; // temporärer Boost
   xpGain = Math.floor(xpGain * permXPMult * tempXPMult);
   
-  addXP(xpGain, hadMythisch);
+  addXP(xpGain);
   
   // Reduziere temporäre Boost-Uses
   if (activeBoosts.valueBoostUses > 0) activeBoosts.valueBoostUses--;
@@ -2593,7 +2590,7 @@ dom.openBtn.addEventListener('click', async () => {
 
 // ======= Level & XP System =======
 // Fügt XP hinzu und prüft auf Level-Up
-function addXP(amount, delayLevelUpPopup = false) {
+function addXP(amount) {
   playerXP += amount;
   
   // Level-Up prüfen (mit Level-Cap bei 50)
@@ -2620,12 +2617,9 @@ function addXP(amount, delayLevelUpPopup = false) {
     populateBoxInfo();
   }
   
-  // Level-Up Benachrichtigung mit optionalem Delay
+  // Level-Up Benachrichtigung sofort anzeigen
   if (leveledUp) {
-    const delay = delayLevelUpPopup ? 1500 : 0; // 1.5s Delay bei Mythisch
-    setTimeout(() => {
-      showLevelUpNotification();
-    }, delay);
+    showLevelUpNotification();
   }
 }
 
