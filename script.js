@@ -2829,8 +2829,8 @@ function updateBoxAvailability() {
       btn.classList.add('locked');
       btn.classList.remove('affordable');
       btn.disabled = true;
-  // Zweizeilig auch im gesperrten Zustand, mit Schloss-Symbol + Icon
-  const newHTML = `🔒 ${icon} ${displayName}<br><small>(${costText} 💰)</small>`;
+      // Gesperrt: nur Schloss-Symbol in Zeile 1, Preis bleibt in Zeile 2
+      const newHTML = `🔒<br><small>(${costText} 💰)</small>`;
       if (btn.innerHTML !== newHTML) {
         btn.innerHTML = newHTML;
       }
