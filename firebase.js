@@ -7,6 +7,19 @@
   let _readyResolve;
   const _ready = new Promise(res => { _readyResolve = res; });
 
+  // Lightweight UI status helper
+  function setFbStatus(kind, text) {
+    try {
+      const el = document.getElementById('fbStatus');
+      if (!el) return;
+      el.className = 'status-pill ' + String(kind || 'off');
+      el.textContent = String(text || '');
+      el.title = String(text || '');
+    } catch (_) { /* ignore */ }
+  }
+  // Initial state while loading
+  setFbStatus('warn', 'Verbinde…');
+
   function hasValidConfig(c) {
     return c && typeof c === 'object' && c.apiKey && c.projectId;
   }
@@ -54,6 +67,7 @@
   async function init() {
     if (!hasValidConfig(cfg)) {
       console.warn('[Firebase] Missing/invalid config. Leaderboard disabled until configured.');
+      setFbStatus('off', 'Firebase aus');
       _readyResolve();
       return;
     }
@@ -73,9 +87,14 @@
       const uid = _auth.currentUser && _auth.currentUser.uid;
       await ensureUserDoc(uid);
 
+      // Mark as online
+      const idShort = (uid || '').slice(0, 6) || '—';
+      setFbStatus('ok', `Verbunden ✓ (${idShort})`);
+
       _readyResolve();
     } catch (e) {
       console.error('[Firebase] init/sign-in failed', e);
+      setFbStatus('err', 'Firebase Fehler');
       _readyResolve();
     }
   }

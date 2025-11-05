@@ -5,6 +5,27 @@ body {
   color: white;
 }
 
+/* Firebase status pill */
+.status-pill {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 2100;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 700;
+  border: 1px solid rgba(255,255,255,0.15);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  background: rgba(255,255,255,0.06);
+  color: #ddd;
+}
+.status-pill.ok    { background: rgba(46, 204, 113, 0.18); border-color: #2ecc71; color: #c7f5d8; }
+.status-pill.warn  { background: rgba(241, 196, 15, 0.18); border-color: #f1c40f; color: #fff2c4; }
+.status-pill.err   { background: rgba(231, 76, 60, 0.20); border-color: #e74c3c; color: #ffd6d1; }
+.status-pill.off   { background: rgba(255,255,255,0.06); border-color: #666; color: #bbb; }
+
 /* Kleine Inline-Versionsanzeige im Titel */
 .app-version-inline {
   font-size: 0.45em;
