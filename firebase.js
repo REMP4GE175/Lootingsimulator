@@ -113,7 +113,13 @@
       if (Number.isFinite(stats.mythicsFound)) payload.mythicsFound = stats.mythicsFound;
       if (Number.isFinite(stats.totalBoxesOpened)) payload.totalBoxesOpened = stats.totalBoxesOpened;
     }
-    try { await ref.set(payload, { merge: true }); } catch (e) { console.warn('updateStats failed', e); }
+    try {
+      await ref.set(payload, { merge: true });
+      return true;
+    } catch (e) {
+      console.warn('updateStats failed', e);
+      throw e;
+    }
   }
 
   async function callPrestige() {
