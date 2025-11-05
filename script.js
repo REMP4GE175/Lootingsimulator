@@ -142,11 +142,26 @@ const stats = {
   mostValuableItem: { name: '', value: 0, rarity: '' },
   boxOpenCounts: {
     'Box#1': 0, 'Box#2': 0, 'Box#3': 0, 'Box#4': 0,
-    'Box#5': 0, 'Box#6': 0, 'Box#7': 0
+    'Box#5': 0, 'Box#6': 0, 'Box#7': 0, 'Box#8': 0,
+    'Box#9': 0, 'Box#10': 0
   },
   // Kumulativ gefundene Schlüssel (nicht Inventarbestand)
   keysFoundCounts: { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 }
 };
+
+// Sicherstellen, dass neue Boxen-Schlüssel in alten Saves existieren
+function ensureBoxOpenCountsKeys() {
+  try {
+    if (!stats.boxOpenCounts || typeof stats.boxOpenCounts !== 'object') {
+      stats.boxOpenCounts = {};
+    }
+    for (const name of boxOrder) {
+      if (!Object.prototype.hasOwnProperty.call(stats.boxOpenCounts, name)) {
+        stats.boxOpenCounts[name] = 0;
+      }
+    }
+  } catch (_) { /* ignore */ }
+}
 
 // Erfolge: Kategorien und Meilensteine
 const BOX_MILESTONES = [50, 100, 200, 1000];
@@ -2241,6 +2256,8 @@ function loadProgress() {
     if (progress.stats) {
       Object.assign(stats, progress.stats);
     }
+    // Nach dem Laden: fehlende Box-Zähler ergänzen (Migration für Box#8-#10)
+    ensureBoxOpenCountsKeys();
     if (progress.achievementsState) {
       // Migration: altes seenMax -> neues Schema
       if (typeof progress.achievementsState.seenMax === 'number') {
@@ -2311,6 +2328,8 @@ function loadProgress() {
 // Load persisted data on startup
 loadCounts();
 loadProgress();
+// Falls ohne Save gestartet: ebenfalls sicherstellen
+ensureBoxOpenCountsKeys();
 // Zustand für eingeklappte Schlüssel-Badges laden
 loadKeysBadgesCollapsed();
 // Entdeckte Schlüssel-Raritäten laden (abhängig vom geladenen keysInventory)
@@ -2487,7 +2506,7 @@ dom.openBtn.addEventListener('click', async () => {
   prestigeState.runBoxesOpened = (prestigeState.runBoxesOpened || 0) + 1;
   // Sofort persistieren, damit der Zähler einen Reload übersteht
   try { saveProgress(); } catch (_) {}
-  stats.boxOpenCounts[openBoxType]++;
+  stats.boxOpenCounts[openBoxType] = (stats.boxOpenCounts[openBoxType] || 0) + 1;
   stats.totalItemsPulled += itemCount;
   // Prüfe auf neue (ungesehene) Erfolge
   updateAchievementsNotify();
@@ -3930,7 +3949,7 @@ function showStats() {
       ${boxOrder.map(boxName => `
         <div class="stat-item">
           <span class="stat-label">${boxName}:</span>
-          <span class="stat-value">${stats.boxOpenCounts[boxName].toLocaleString('de-DE')}x</span>
+          <span class="stat-value">${Number(stats.boxOpenCounts[boxName] || 0).toLocaleString('de-DE')}x</span>
         </div>
       `).join('')}
     </div>
@@ -4062,12 +4081,27 @@ function getDiscoveredCountByRarity(rarity) {
   }
 }
 
+// Dynamische Prestige-Anforderung je aktueller Prestige-Stufe
+function getPrestigeRarityRequirement(level) {
+  const lvl = Number(level || 0);
+  if (lvl < 10) return { type: 'Mythisch', needed: 5 };
+  if (lvl < 20) return { type: 'Aetherisch', needed: 1 };
+  if (lvl < 30) return { type: 'Aetherisch', needed: 2 };
+  return { type: 'Aetherisch', needed: 3 };
+}
+
 function canPrestige() {
   const hasLevel = playerLevel >= MAX_LEVEL;
-  const hasMyth = getDiscoveredCountByRarity('Mythisch') >= 5;
+  const req = getPrestigeRarityRequirement(prestigeState.level || 0);
+  let hasRarity = false;
+  if (req.type === 'Mythisch') {
+    hasRarity = getDiscoveredCountByRarity('Mythisch') >= req.needed;
+  } else {
+    hasRarity = getDiscoveredCountByRarity('Aetherisch') >= req.needed;
+  }
   // Bedingung: 200 Boxen seit letztem Prestige (nicht Lifetime)
   const hasBoxes = (prestigeState.runBoxesOpened || 0) >= 200;
-  return hasLevel && hasMyth && hasBoxes;
+  return hasLevel && hasRarity && hasBoxes;
 }
 
 function updatePrestigeUI() {
@@ -4089,19 +4123,23 @@ function updatePrestigeUI() {
       const nextBonusValue = currBonusValue + 5;
       const nextBonusLuck = currBonusLuck + 1;
       const cLevel = playerLevel >= MAX_LEVEL;
+      const req = getPrestigeRarityRequirement(prestigeState.level || 0);
       const mythCount = Math.max(0, getDiscoveredCountByRarity('Mythisch') || 0);
-      const cMyth = mythCount >= 5;
+      const aetherCount = Math.max(0, getDiscoveredCountByRarity('Aetherisch') || 0);
+      const reqLabel = req.type === 'Mythisch' ? 'Mythische' : 'Ätherische';
+      const haveCount = req.type === 'Mythisch' ? mythCount : aetherCount;
+      const cRarity = haveCount >= req.needed;
       const runBoxes = Math.max(0, prestigeState.runBoxesOpened || 0);
       const cBoxes = runBoxes >= 200;
       dom.prestigeInfo.innerHTML = `
         <h3>Bedingungen</h3>
         <ul class="prestige-conds">
           <li class="${cLevel ? 'ok' : 'fail'}">- Level ${MAX_LEVEL} ${cLevel ? '✓' : ''}</li>
-          <li class="${cMyth ? 'ok' : 'fail'}">- 5 Mythische Items <span style="opacity:0.85">(${Math.min(mythCount,5)}/5)</span> ${cMyth ? '✓' : ''}</li>
+          <li class="${cRarity ? 'ok' : 'fail'}">- ${req.needed} ${reqLabel} Items <span style="opacity:0.85">(${Math.min(haveCount, req.needed)}/${req.needed})</span> ${cRarity ? '✓' : ''}</li>
           <li class="${cBoxes ? 'ok' : 'fail'}">- 200 Boxen geöffnet <span style="opacity:0.85">(${Math.min(runBoxes,200)}/200)</span> ${cBoxes ? '✓' : ''}</li>
         </ul>
         <div class="prestige-status" style="opacity:.9; font-size:13px; margin:-4px 0 10px 0;">
-          <span id="prestigeLocalCounts">Lokal: Mythisch=${mythCount}, Boxen seit Prestige=${runBoxes}</span>
+          <span id="prestigeLocalCounts">Lokal: Mythisch=${mythCount}, Ätherisch=${aetherCount}, Boxen seit Prestige=${runBoxes}</span>
           <button id="syncStatsBtn" class="upgrade-btn" style="margin-left:8px; padding:4px 10px; font-size:12px; width:auto;">Sync jetzt</button>
           <span id="syncResult" style="margin-left:8px; opacity:.85"></span>
         </div>
@@ -4164,9 +4202,11 @@ async function doPrestige() {
   try {
     if (window.firebaseApi && typeof window.firebaseApi.updateStats === 'function') {
       const mythCount = Math.max(0, getDiscoveredCountByRarity('Mythisch') || 0);
+      const aetherCount = Math.max(0, getDiscoveredCountByRarity('Aetherisch') || 0);
       const payload = {
         totalXP: Number(playerXP || 0),
         mythicsFound: Number(mythCount || 0),
+        aethericsFound: Number(aetherCount || 0),
         totalBoxesOpened: Number((stats && stats.totalBoxesOpened) || 0),
       };
       // Wichtig: auf den Write warten, damit die Function konsistente Werte liest
@@ -4196,8 +4236,10 @@ async function doPrestige() {
           } else if (code.includes('failed-precondition')) {
             // Versuche, genauere Begründung aus Nachricht zu lesen
             const msg = (e && (e.message || e.error?.message || '')).toLowerCase();
-            if (msg.includes('mythic')) {
-              alert('Prestige abgelehnt: Du brauchst mindestens 5 mythische Funde in diesem Account.');
+            if (msg.includes('aetheric')) {
+              alert('Prestige abgelehnt: Du brauchst mehr ätherische Funde (siehe Bedingungen).');
+            } else if (msg.includes('mythic')) {
+              alert('Prestige abgelehnt: Du brauchst mindestens 5 mythische Funde (siehe Bedingungen).');
             } else if (msg.includes('boxes')) {
               alert('Prestige abgelehnt: Du brauchst 200 geöffnete Boxen seit dem letzten Prestige.');
             } else {
@@ -4300,9 +4342,11 @@ document.addEventListener('click', async (e) => {
     try {
       if (window.firebaseApi && typeof window.firebaseApi.updateStats === 'function') {
         const mythCount = Math.max(0, getDiscoveredCountByRarity('Mythisch') || 0);
+        const aetherCount = Math.max(0, getDiscoveredCountByRarity('Aetherisch') || 0);
         const payload = {
           totalXP: Number(playerXP || 0),
           mythicsFound: Number(mythCount || 0),
+          aethericsFound: Number(aetherCount || 0),
           totalBoxesOpened: Number((stats && stats.totalBoxesOpened) || 0),
         };
         await window.firebaseApi.updateStats(payload);

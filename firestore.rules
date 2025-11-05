@@ -16,6 +16,7 @@ service cloud.firestore {
                       'displayName',
                       'totalXP',
                       'mythicsFound',
+                      'aethericsFound',
                       'totalBoxesOpened',
                       'createdAt',
                       'lastSeenAt'
@@ -30,6 +31,7 @@ service cloud.firestore {
                     && (("displayName" in request.resource.data) ? (request.resource.data.displayName is string) : true)
                     && (("totalXP" in request.resource.data) ? (request.resource.data.totalXP is number) : true)
                     && (("mythicsFound" in request.resource.data) ? (request.resource.data.mythicsFound is number) : true)
+                    && (("aethericsFound" in request.resource.data) ? (request.resource.data.aethericsFound is number) : true)
                     && (("totalBoxesOpened" in request.resource.data) ? (request.resource.data.totalBoxesOpened is number) : true);
 
       // Friends subcollection: user may manage their own friends list

@@ -37,15 +37,15 @@ exports.submitPrestige = functions.https.onCall(async (data, context) => {
   const now = admin.firestore.Timestamp.now();
   const minGapSeconds = 10; // basic throttle to mitigate spamming
 
-  const MIN_MYTHICS = 5;
   const MIN_RUN_BOXES = 200;
 
   const res = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const doc = snap.exists ? snap.data() : {};
-    const currentLevel = Number(doc.prestigeLevel || 0);
+  const currentLevel = Number(doc.prestigeLevel || 0);
     const lastPrestigeAt = doc.lastPrestigeAt instanceof admin.firestore.Timestamp ? doc.lastPrestigeAt : null;
-    const mythicsFound = Number(doc.mythicsFound || 0);
+  const mythicsFound = Number(doc.mythicsFound || 0);
+  const aethericsFound = Number(doc.aethericsFound || 0);
     const totalBoxesOpened = Number(doc.totalBoxesOpened || 0);
     const lastPrestigeBoxesOpened = Number(doc.lastPrestigeBoxesOpened || 0);
 
@@ -58,8 +58,24 @@ exports.submitPrestige = functions.https.onCall(async (data, context) => {
 
     // Basic eligibility checks based on server-known aggregates
     const runBoxes = Math.max(0, totalBoxesOpened - lastPrestigeBoxesOpened);
-    if (mythicsFound < MIN_MYTHICS) {
-      throw new functions.https.HttpsError('failed-precondition', 'Not enough mythics for prestige');
+    // Dynamic rarity requirement by prestige tier
+    // <10: 5 Mythics; <20: 1 Aetheric; <30: 2 Aetheric; >30: 3 Aetheric
+    if (currentLevel < 10) {
+      if (mythicsFound < 5) {
+        throw new functions.https.HttpsError('failed-precondition', 'Not enough mythics for prestige');
+      }
+    } else if (currentLevel < 20) {
+      if (aethericsFound < 1) {
+        throw new functions.https.HttpsError('failed-precondition', 'Not enough aetherics for prestige');
+      }
+    } else if (currentLevel < 30) {
+      if (aethericsFound < 2) {
+        throw new functions.https.HttpsError('failed-precondition', 'Not enough aetherics for prestige');
+      }
+    } else { // > 30
+      if (aethericsFound < 3) {
+        throw new functions.https.HttpsError('failed-precondition', 'Not enough aetherics for prestige');
+      }
     }
     if (runBoxes < MIN_RUN_BOXES) {
       throw new functions.https.HttpsError('failed-precondition', 'Not enough boxes opened this run');

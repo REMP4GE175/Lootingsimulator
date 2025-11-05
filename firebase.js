@@ -52,6 +52,7 @@
           prestigeLevel: 0,
           totalXP: 0,
           mythicsFound: 0,
+          aethericsFound: 0,
           totalBoxesOpened: 0,
           createdAt: now,
           lastSeenAt: now
@@ -111,6 +112,7 @@
       if (typeof stats.displayName === 'string' && stats.displayName) payload.displayName = stats.displayName;
       if (Number.isFinite(stats.totalXP)) payload.totalXP = stats.totalXP;
       if (Number.isFinite(stats.mythicsFound)) payload.mythicsFound = stats.mythicsFound;
+      if (Number.isFinite(stats.aethericsFound)) payload.aethericsFound = stats.aethericsFound;
       if (Number.isFinite(stats.totalBoxesOpened)) payload.totalBoxesOpened = stats.totalBoxesOpened;
     }
     try {
