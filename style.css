@@ -2010,33 +2010,4 @@ body {
   .lb-tab { font-size: 13px; }
 }
 
-/* Scroll-Hinweis fürs Leaderboard (mobil) */
-.lb-scroll-hint {
-  position: fixed;
-  left: 50%;
-  top: 58%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.6);
-  border: 1px solid #555;
-  color: #fff;
-  padding: 10px 14px;
-  border-radius: 999px;
-  z-index: 6000;
-  display: none;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  user-select: none;
-}
-.lb-scroll-hint .icon {
-  font-size: 20px;
-  animation: hintPulse 1.2s ease-in-out infinite;
-}
-.lb-scroll-hint.show { display: inline-flex; }
-@keyframes hintPulse {
-  0%,100% { transform: translateY(0); }
-  50% { transform: translateY(6px); }
-}
-@media (min-width: 769px) {
-  .lb-scroll-hint { display: none !important; }
-}
+/* (entfernt) Scroll-Hinweis fürs Leaderboard war vorhanden, wurde auf Wunsch entfernt */

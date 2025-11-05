@@ -4188,41 +4188,6 @@ updatePrestigeUI();
     const lbModal = document.getElementById('leaderboardModal');
     const lbClose = document.getElementById('closeLeaderboardBtn');
     const lbContent = document.getElementById('leaderboardContent');
-    let lbScrollHintEl = null;
-
-    const isMobileScreen = () => (typeof window !== 'undefined') && (window.innerWidth <= 768);
-
-    function ensureLbScrollHint() {
-      if (lbScrollHintEl || !isMobileScreen()) return;
-      const el = document.createElement('div');
-      el.className = 'lb-scroll-hint';
-      el.innerHTML = `<span class="icon">⬇️</span><span>Nach unten scrollen</span>`;
-      document.body.appendChild(el);
-      el.addEventListener('click', () => {
-        try { attemptScrollToList(true); } catch(_) {}
-      });
-      lbScrollHintEl = el;
-    }
-
-    function showLbScrollHint() {
-      if (!isMobileScreen()) return;
-      ensureLbScrollHint();
-      if (lbScrollHintEl) lbScrollHintEl.classList.add('show');
-    }
-    function hideLbScrollHint() {
-      if (lbScrollHintEl) lbScrollHintEl.classList.remove('show');
-    }
-
-    function attemptScrollToList(force = false) {
-      try {
-        const view = document.getElementById('lbView');
-        if (!view) return;
-        // Nur auf Mobil versuchen zu scrollen oder wenn explizit gefordert
-        if (isMobileScreen() || force) {
-          setTimeout(() => { try { view.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(_) {} }, 60);
-        }
-      } catch (_) {}
-    }
 
     function renderTabs(active) {
       const html = `
@@ -4275,12 +4240,24 @@ updatePrestigeUI();
       Array.from(lbContent.querySelectorAll('.lb-tab')).forEach(btn => {
         btn.addEventListener('click', () => {
           renderTabs(btn.dataset.tab);
-          if (btn.dataset.tab === 'global') renderGlobal(); else renderFriends();
+          const isGlobal = btn.dataset.tab === 'global';
+          if (isGlobal) renderGlobal(); else renderFriends();
+          // Mobile: nach dem Rendern zum Leaderboard-Bereich scrollen
+          try {
+            if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
+              setTimeout(() => {
+                const target = document.getElementById('lbView') || document.getElementById('leaderboardContent');
+                if (target && typeof target.getBoundingClientRect === 'function') {
+                  const rect = target.getBoundingClientRect();
+                  const y = (window.scrollY || window.pageYOffset || 0) + rect.top - 16;
+                  window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+                }
+              }, 60);
+            }
+          } catch (_) {}
         });
       });
       if (active === 'friends') attachFriendsTools();
-      // Beim Wechsel erneut bis zur Liste scrollen (mobil)
-      attemptScrollToList(false);
     }
 
     async function renderGlobal() {
@@ -4427,15 +4404,22 @@ updatePrestigeUI();
       lbModal.style.display = 'block';
       renderTabs('global');
       renderGlobal();
-      // Scroll-Hinweis anzeigen und ggf. automatisch zur Liste springen
-      showLbScrollHint();
-      attemptScrollToList(false);
+      // Mobile: beim Öffnen direkt zum Leaderboard-Bereich scrollen
+      try {
+        if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
+          setTimeout(() => {
+            const target = document.getElementById('lbView') || document.getElementById('leaderboardContent');
+            if (target && typeof target.getBoundingClientRect === 'function') {
+              const rect = target.getBoundingClientRect();
+              const y = (window.scrollY || window.pageYOffset || 0) + rect.top - 16;
+              window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+            }
+          }, 60);
+        }
+      } catch (_) {}
     });
-    if (lbClose) lbClose.addEventListener('click', () => { if (lbModal) { lbModal.style.display = 'none'; hideLbScrollHint(); } });
-    if (lbModal) lbModal.addEventListener('click', (e) => { if (e.target === lbModal) { lbModal.style.display = 'none'; hideLbScrollHint(); } });
-    if (lbModal) lbModal.addEventListener('scroll', () => {
-      try { if (lbModal.scrollTop > 50) hideLbScrollHint(); } catch (_) {}
-    });
+    if (lbClose) lbClose.addEventListener('click', () => { if (lbModal) lbModal.style.display = 'none'; });
+    if (lbModal) lbModal.addEventListener('click', (e) => { if (e.target === lbModal) lbModal.style.display = 'none'; });
 
     // Initial write to ensure user exists and stats are visible
     try {
