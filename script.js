@@ -456,9 +456,7 @@ const itemPools = {
     { name: "Militärkompass", icon: "Itembilder/Episch/militaerkompass.png", value: 700, description: "Aus dem 2. Weltkrieg, funktioniert noch." },
     { name: "Orden & Medaille", icon: "Itembilder/Episch/orden.png", value: 950, description: "Militärische Auszeichnung mit Band." },
     { name: "Pelzmantel", icon: "Itembilder/Episch/pelzmantel.png", value: 1300, description: "Vintage, ethisch fragwürdig, aber wertvoll." },
-    { name: "Katze im Karton", icon: "Itembilder/Episch/Floki.png", value: 1050, description: "Eine niedliche Katze, die es sich in einem Karton bequem gemacht hat." },
-    { name: "Katze in Katzenhöhle", icon: "Itembilder/Episch/Biene.png", value: 1000, description: "Eine zufriedene Katze, die in ihrer Höhle döst." },
-    { name: "Katze auf türkisem Stuhl", icon: "Itembilder/Episch/Simba.png", value: 1150, description: "Eine elegante Katze thront auf einem stilvollen türkisen Stuhl." }
+    
   ],
   Legendary: [
     // Schlüssel (Legendary) – sehr selten
@@ -495,10 +493,9 @@ const itemPools = {
   ]
   ,
   Aetherisch: [
-    // Platzhalter-Items für die ultra-seltene Stufe (verwenden vorerst Mythisch-Icons)
-    { name: "Ätherischer Splitter", icon: "Itembilder/Mythisch/zeitkompass.png", value: 300000, description: "Ein Splitter reiner Ätherenergie." },
-    { name: "Ätherisches Sigill", icon: "Itembilder/Mythisch/philosophenstein.png", value: 400000, description: "Ein Siegel, das die Realität leicht verbiegt." },
-    { name: "Ätherischer Kern", icon: "Itembilder/Mythisch/aetherisches_grimoire.png", value: 500000, description: "Ein pulsierender Kern jenseitiger Macht." }
+    { name: "Katze im Karton", icon: "Itembilder/Episch/Floki.png", value: 500000, description: "Eine niedliche Katze, die es sich in einem Karton bequem gemacht hat." },
+    { name: "Katze in Katzenhöhle", icon: "Itembilder/Episch/Biene.png", value: 500000, description: "Eine zufriedene Katze, die in ihrer Höhle döst." },
+    { name: "Katze auf türkisem Stuhl", icon: "Itembilder/Episch/Simba.png", value: 500000, description: "Eine elegante Katze thront auf einem stilvollen türkisen Stuhl." }
   ]
 };
 
