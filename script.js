@@ -2643,6 +2643,13 @@ dom.openBtn.addEventListener('click', async () => {
 
   // Öffnung ist beendet
   isOpening = false;
+  // Quickslots/Shop nach Abschluss wieder freigeben (erneut rendern, jetzt wo isOpening=false)
+  try {
+    renderQuickslots();
+    if (dom.shopModal && dom.shopModal.style.display === 'block') {
+      showShop();
+    }
+  } catch (_) { /* ignore */ }
 
   // Icon am Ende nochmals aktualisieren (falls Schlüsselanzahl sich geändert hat)
   updateOpenBtnIcon();
