@@ -3983,6 +3983,16 @@ function doPrestige() {
   unlockedBoxes.add('Box#1');
   boxType = 'Box#1';
   keysInventory = { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 };
+  // Schlüssel-UI sofort aktualisieren
+  pendingKeyOpen = null; // evtl. Vormerkung aufheben
+  try {
+    renderKeysButtonBadges();
+    setKeysBtnNotify(false);
+    if (__keysModal && __keysModal.style.display === 'block') {
+      // Modal-Inhalt mit neuem Bestand neu aufbauen
+      showKeysModal();
+    }
+  } catch (_) { /* ignore */ }
 
   // Items/Entdeckungen: zurücksetzen
   itemCounts = {};
