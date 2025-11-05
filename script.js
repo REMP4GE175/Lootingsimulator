@@ -4019,6 +4019,11 @@ function updatePrestigeUI() {
           <li class="${cMyth ? 'ok' : 'fail'}">- 5 Mythische Items <span style="opacity:0.85">(${Math.min(mythCount,5)}/5)</span> ${cMyth ? '✓' : ''}</li>
           <li class="${cBoxes ? 'ok' : 'fail'}">- 200 Boxen geöffnet <span style="opacity:0.85">(${Math.min(runBoxes,200)}/200)</span> ${cBoxes ? '✓' : ''}</li>
         </ul>
+        <div class="prestige-status" style="opacity:.9; font-size:13px; margin:-4px 0 10px 0;">
+          <span id="prestigeLocalCounts">Lokal: Mythisch=${mythCount}, Boxen seit Prestige=${runBoxes}</span>
+          <button id="syncStatsBtn" class="upgrade-btn" style="margin-left:8px; padding:4px 10px; font-size:12px; width:auto;">Sync jetzt</button>
+          <span id="syncResult" style="margin-left:8px; opacity:.85"></span>
+        </div>
         <h3>Auswirkungen</h3>
         <p>Run-Reset:</p>
         <ul>
@@ -4085,6 +4090,10 @@ async function doPrestige() {
       };
       // Wichtig: auf den Write warten, damit die Function konsistente Werte liest
       await window.firebaseApi.updateStats(payload);
+      try {
+        const resEl = document.getElementById('syncResult');
+        if (resEl) { resEl.textContent = '✔ Server synchronisiert'; resEl.style.color = '#2ecc71'; setTimeout(()=>{ resEl.textContent=''; }, 3000); }
+      } catch(_){}
     }
   } catch (_) { /* ignore */ }
 
@@ -4202,6 +4211,30 @@ if (dom.confirmPrestigeBtn) {
 
 // Initial Prestige-UI Sync
 updatePrestigeUI();
+
+// Wire "Sync jetzt" button in prestige modal after content render
+document.addEventListener('click', async (e) => {
+  const t = e.target;
+  if (t && t.id === 'syncStatsBtn') {
+    try {
+      if (window.firebaseApi && typeof window.firebaseApi.updateStats === 'function') {
+        const mythCount = Math.max(0, getDiscoveredCountByRarity('Mythisch') || 0);
+        const payload = {
+          totalXP: Number(playerXP || 0),
+          mythicsFound: Number(mythCount || 0),
+          totalBoxesOpened: Number((stats && stats.totalBoxesOpened) || 0),
+        };
+        await window.firebaseApi.updateStats(payload);
+        const resEl = document.getElementById('syncResult');
+        if (resEl) { resEl.textContent = '✔ Server synchronisiert'; resEl.style.color = '#2ecc71'; setTimeout(()=>{ resEl.textContent=''; }, 3000); }
+      }
+    } catch (err) {
+      const resEl = document.getElementById('syncResult');
+      if (resEl) { resEl.textContent = 'Fehler beim Sync'; resEl.style.color = '#e74c3c'; setTimeout(()=>{ resEl.textContent=''; }, 3000); }
+      console.warn('Manual sync failed', err);
+    }
+  }
+});
 
 // ======= Leaderboard (Firebase) =======
 (function initLeaderboard() {
