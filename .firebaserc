@@ -1,5 +1,6 @@
 {
   "projects": {
+    "default": "looting-simulator",
     "Game": "looting-simulator"
   },
   "targets": {},

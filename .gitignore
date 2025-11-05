@@ -6,3 +6,13 @@ Thumbs.db
 # Build artifacts
 node_modules/
 dist/
+
+# Firebase local cache
+.firebase/
+
+# Functions deps
+functions/node_modules/
+
+# Env files
+.env
+.env.*

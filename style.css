@@ -1986,17 +1986,10 @@ body {
 }
 
 @media (max-width: 480px) {
-  /* Zwei Spalten oben (Shop/Keys), darunter der Öffnen-Button über volle Breite */
-  #actionButtons {
-    grid-template-columns: 1fr 1fr;
-    grid-template-areas:
-      "left keys"
-      "open open";
-    gap: 8px;
-  }
-  #leftActions { grid-area: left; justify-self: center; }
-  #keysBtn { grid-area: keys; justify-self: center; }
-  #openBtn { grid-area: open; width: 100%; }
+  #actionButtons { grid-template-columns: 1fr; gap: 8px; }
+  #leftActions { grid-column: 1; justify-self: center; }
+  #openBtn { grid-column: 1; width: 100%; }
+  #keysBtn { grid-column: 1; justify-self: center; }
 
   .quickslot-btn { width: 32px; height: 32px; }
   .quickslot-btn .potion-icon { width: 22px; height: 22px; }
@@ -2009,5 +2002,3 @@ body {
 
   .lb-tab { font-size: 13px; }
 }
-
-/* (entfernt) Scroll-Hinweis fürs Leaderboard war vorhanden, wurde auf Wunsch entfernt */

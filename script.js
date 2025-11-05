@@ -4064,7 +4064,7 @@ if (dom.prestigeModal) {
   });
 }
 
-function doPrestige() {
+async function doPrestige() {
   if (!canPrestige()) {
     alert(`Du musst Level ${MAX_LEVEL} erreichen, um zu prestigen.`);
     return;
@@ -4083,7 +4083,8 @@ function doPrestige() {
         mythicsFound: Number(mythCount || 0),
         totalBoxesOpened: Number((stats && stats.totalBoxesOpened) || 0),
       };
-      window.firebaseApi.updateStats(payload);
+      // Wichtig: auf den Write warten, damit die Function konsistente Werte liest
+      await window.firebaseApi.updateStats(payload);
     }
   } catch (_) { /* ignore */ }
 
@@ -4098,7 +4099,28 @@ function doPrestige() {
         // Danach lokalen Reset durchführen
         proceedAfterPrestige();
       }).catch((e)=>{
-        alert('Prestige fehlgeschlagen (Server). Bitte später erneut versuchen.');
+        try {
+          const code = (e && (e.code||e.error?.code)) || '';
+          if (code.includes('unauth')) {
+            alert('Du bist nicht angemeldet. Bitte die Seite neu laden.');
+          } else if (code.includes('failed-precondition')) {
+            // Versuche, genauere Begründung aus Nachricht zu lesen
+            const msg = (e && (e.message || e.error?.message || '')).toLowerCase();
+            if (msg.includes('mythic')) {
+              alert('Prestige abgelehnt: Du brauchst mindestens 5 mythische Funde in diesem Account.');
+            } else if (msg.includes('boxes')) {
+              alert('Prestige abgelehnt: Du brauchst 200 geöffnete Boxen seit dem letzten Prestige.');
+            } else {
+              alert('Prestige abgelehnt: Bedingungen laut Server noch nicht erfüllt.');
+            }
+          } else if (code.includes('resource-exhausted')) {
+            alert('Zu viele Anfragen – bitte kurz warten und erneut versuchen.');
+          } else {
+            alert('Prestige fehlgeschlagen (Server). Bitte später erneut versuchen.');
+          }
+        } catch (_) {
+          alert('Prestige fehlgeschlagen (Server). Bitte später erneut versuchen.');
+        }
         console.warn('Prestige server failed', e);
       });
     }
