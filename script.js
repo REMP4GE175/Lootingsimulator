@@ -2354,6 +2354,8 @@ dom.openBtn.addEventListener('click', async () => {
   stats.totalBoxesOpened++;
   // Run-Zähler: Boxen seit letztem Prestige
   prestigeState.runBoxesOpened = (prestigeState.runBoxesOpened || 0) + 1;
+  // Sofort persistieren, damit der Zähler einen Reload übersteht
+  try { saveProgress(); } catch (_) {}
   stats.boxOpenCounts[openBoxType]++;
   stats.totalItemsPulled += itemCount;
   // Prüfe auf neue (ungesehene) Erfolge
