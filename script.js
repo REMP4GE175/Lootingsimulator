@@ -660,7 +660,17 @@ const boxConfigs = {
 };
 
 // Konstanten
-const SLOT_SIZE_PX = 100;
+// Slot-Größe responsiv an Bildschirmbreite anpassen
+function computeSlotSize() {
+  try {
+    const w = Math.min(window.innerWidth || 0, document.documentElement.clientWidth || 9999) || window.innerWidth || 9999;
+    if (w <= 360) return 64;
+    if (w <= 480) return 72;
+    if (w <= 768) return 84;
+    return 100;
+  } catch (_) { return 100; }
+}
+let SLOT_SIZE_PX = computeSlotSize();
 
 // Aktueller gewählter Box-Typ und Kontostand
 let boxType = "Box#1";
@@ -670,7 +680,7 @@ let isOpening = false;
 let pendingBoxType = null; // gewünschter Box-Wechsel, der nach Öffnung angewendet wird
 
 // Box-Reihenfolge für Progression
-const boxOrder = ["Box#1", "Box#2", "Box#3", "Box#4", "Box#5", "Box#6", "Box#7", "Testbox"];
+const boxOrder = ["Box#1", "Box#2", "Box#3", "Box#4", "Box#5", "Box#6", "Box#7"];
 
 // Anzeigenamen für die Boxen
 const boxDisplayNames = {
@@ -2938,6 +2948,27 @@ function updateBoxAvailability() {
 updateBalance();
 selectBox('Box#1');
 createEmptyGrid(); // Zeigt leeres Grid beim Start
+
+// Reagiere auf Größenänderungen: passe Slot-Größe an und rendere leeres Grid neu, wenn nicht geöffnet wird
+try {
+  window.addEventListener('resize', (() => {
+    let last = SLOT_SIZE_PX;
+    let raf = null;
+    return function onResize() {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const ns = computeSlotSize();
+        if (ns !== last) {
+          last = ns;
+          SLOT_SIZE_PX = ns;
+          if (!isOpening) {
+            try { createEmptyGrid(); } catch (_) {}
+          }
+        }
+      });
+    };
+  })());
+} catch (_) { /* ignore */ }
 // Schlüssel-Button einfügen
 ensureKeysButton();
 // Entferne standardmäßiges 🔑 aus dem Öffnen-Button-Label, falls im HTML vorhanden
@@ -4163,6 +4194,7 @@ updatePrestigeUI();
         <div class="lb-tabs">
           <button class="lb-tab ${active==='global'?'active':''}" data-tab="global">Global</button>
           <button class="lb-tab ${active==='friends'?'active':''}" data-tab="friends">Freunde</button>
+          <button id="lbRefreshBtn" title="Aktualisieren" style="margin-left:auto;">🔄 Aktualisieren</button>
         </div>
         <div id="lbProfile" style="margin:10px 0; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <span style="opacity:.85">Dein Name:</span>
@@ -4182,6 +4214,29 @@ updatePrestigeUI();
         </div>`;
       lbContent.innerHTML = html;
       attachProfileTools();
+      // Refresh-Button: lädt die aktuell aktive Ansicht neu
+      const refreshBtn = lbContent.querySelector('#lbRefreshBtn');
+      if (refreshBtn) {
+        const doRefresh = async () => {
+          try {
+            refreshBtn.disabled = true;
+            refreshBtn.textContent = 'Lädt…';
+            const activeEl = lbContent.querySelector('.lb-tab.active');
+            const cur = activeEl ? activeEl.dataset.tab : 'global';
+            if (cur === 'global') {
+              await renderGlobal();
+            } else {
+              // Freunde-Ansicht: Liste und Rangliste aktualisieren
+              await renderFriends();
+              try { await attachFriendsTools(); } catch (_) {}
+            }
+          } finally {
+            refreshBtn.disabled = false;
+            refreshBtn.textContent = '🔄 Aktualisieren';
+          }
+        };
+        refreshBtn.addEventListener('click', doRefresh);
+      }
       Array.from(lbContent.querySelectorAll('.lb-tab')).forEach(btn => {
         btn.addEventListener('click', () => {
           renderTabs(btn.dataset.tab);

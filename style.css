@@ -278,8 +278,8 @@ body {
 
 .slot {
   position: relative;
-  width: 100px;
-  height: 100px;
+  width: 100%; /* füllt die Grid-Zelle, Größe wird per JS über gridTemplate gesetzt */
+  height: 100%;
   background-color: #222;
   border: 1px solid #555;
   display: flex;
@@ -568,8 +568,10 @@ body {
 
 /* Loot-Grid Icons (icons shown while revealing) */
 #lootContainer .item img {
-  width: 64px;
-  height: 64px;
+  width: 70%;
+  height: 70%;
+  max-width: 72px;
+  max-height: 72px;
   object-fit: contain;
 }
 
@@ -946,6 +948,18 @@ body {
   gap: 10px;
   justify-content: center;
 }
+
+/* Leaderboard Tabs row */
+.lb-tabs { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.lb-tab { 
+  background: rgba(255,255,255,0.06);
+  border: 1px solid #666;
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.lb-tab.active { background: rgba(46,204,113,0.15); border-color: #2ecc71; }
 
 #devToggleWrapper {
   display: none; /* hide visible dev checkbox wrapper */
@@ -1920,4 +1934,71 @@ body {
   font-size: 14px;
   color: #aaa;
   font-weight: 600;
+}
+
+/* ======= Responsive Layout ======= */
+@media (max-width: 1024px) {
+  #levelDisplay { max-width: 720px; }
+}
+
+@media (max-width: 768px) {
+  #playRow { flex-direction: column; align-items: center; gap: 12px; }
+  #openBtn { font-size: 20px; padding: 12px 28px; }
+  #openBtn .open-btn-icon { font-size: 18px; }
+  #openBtn .open-btn-icon img { width: 18px; height: 18px; }
+  #shopBtn { font-size: 16px; padding: 8px 18px; }
+
+  #boxSelection { grid-template-columns: repeat(2, 1fr); max-width: 420px; }
+  #boxBtn7 { grid-column: 1 / span 2; justify-self: center; }
+  #boxSelection button { height: 72px; font-size: 16px; }
+  #boxSelection button small { font-size: 0.8em; }
+
+  #iconButtons { gap: 8px; }
+  #iconButtons button { font-size: 20px; padding: 8px 12px; }
+
+  #levelDisplay { max-width: 92vw; padding: 12px 16px; }
+  #playerLevel { font-size: 20px; }
+  #playerTitle { font-size: 16px; }
+  #xpBarContainer { height: 24px; }
+  #xpText { font-size: 12px; }
+
+  .skill-modal { max-width: 92vw; padding: 20px; }
+  .skill-modal h2 { font-size: 26px; }
+
+  .info-content { width: 92vw !important; }
+
+  #soundControl { top: 12px; right: 12px; }
+  .sound-btn { width: 44px; height: 44px; font-size: 22px; }
+  .volume-slider { min-width: 180px; }
+
+  /* Overlays a bit tighter */
+  #collectionOverlay, #statsOverlay, #achievementsOverlay {
+    top: 5%; left: 5%; width: 90%; height: 90%;
+  }
+
+  /* Keys modal compaction */
+  #keysModal .keys-row { grid-template-columns: 160px 32px 1fr auto; }
+  #keysModal .key-icon-wrap { width: 48px; height: 48px; }
+  #keysModal .key-icon-wrap img { width: 38px; height: 38px; }
+  #keysModal .door-emoji { font-size: 30px; width: 30px; flex: 0 0 30px; }
+
+  .lb-tab { padding: 6px 10px; font-size: 14px; }
+}
+
+@media (max-width: 480px) {
+  #actionButtons { grid-template-columns: 1fr; gap: 8px; }
+  #leftActions { grid-column: 1; justify-self: center; }
+  #openBtn { grid-column: 1; width: 100%; }
+  #keysBtn { grid-column: 1; justify-self: center; }
+
+  .quickslot-btn { width: 32px; height: 32px; }
+  .quickslot-btn .potion-icon { width: 22px; height: 22px; }
+
+  #boxSelection { max-width: 360px; }
+  #boxSelection button { height: 64px; font-size: 15px; }
+
+  .sound-btn { width: 40px; height: 40px; font-size: 20px; }
+  .volume-slider { min-width: 160px; }
+
+  .lb-tab { font-size: 13px; }
 }
