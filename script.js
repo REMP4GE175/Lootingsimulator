@@ -1108,6 +1108,11 @@ function ensureQuickslotsContainer() {
 function quickBuyPotion(itemId) {
   // Safety: nur bekannte Tränke erlauben
   if (!shopItems[itemId] || shopItems[itemId].type !== 'temp') return;
+  // Während einer laufenden Öffnung keine Trankkäufe zulassen
+  if (isOpening) {
+    alert('Während des Öffnens von Boxen können keine Tränke gekauft werden.');
+    return;
+  }
   purchaseShopItem(itemId);
 }
 
@@ -1199,8 +1204,9 @@ function renderQuickslots() {
   const beltNote = (permanentUpgrades.permPotionBelt || 0) >= 1 ? `\n+1 Aufladung pro Kauf` : '';
       btn.title = `${item.icon} ${item.name}\n${item.description}\nPreis: ${formatNumber(item.cost)} 💰${beltNote}`;
       btn.innerHTML = renderPotionIconHTML(item.icon);
-      const canAfford = balance >= item.cost;
-      btn.disabled = !canAfford;
+  const canAfford = balance >= item.cost;
+  // Während einer Öffnung keine Trankkäufe zulassen
+  btn.disabled = !canAfford || isOpening;
       btn.addEventListener('click', () => quickBuyPotion(m.id));
       // Uses-Badge
       const uses = activeBoosts[m.usesKey] || 0;
@@ -2232,6 +2238,13 @@ dom.openBtn.addEventListener('click', async () => {
   dom.openBtn.style.opacity = '0.5';
   // Box-Auswahl temporär deaktivieren
   setBoxSelectionEnabled(false);
+  // Während der Öffnung: Quickslots/Shop-UI aktualisieren (Tränke sperren)
+  try {
+    renderQuickslots();
+    if (dom.shopModal && dom.shopModal.style.display === 'block') {
+      showShop();
+    }
+  } catch (_) { /* ignore */ }
   // Tracke, ob für diese Öffnung bereits ein Schlüssel verbraucht wurde,
   // um doppelten Verbrauch (Vormerkung + Auto-Verbrauch im KeyRoom) zu vermeiden
   let __consumedKeyThisOpen = false;
@@ -2282,6 +2295,11 @@ dom.openBtn.addEventListener('click', async () => {
         setBoxSelectionEnabled(true);
         isOpening = false;
         setSearchingState(false);
+        // Quickslots/Shop wieder freigeben
+        try {
+          renderQuickslots();
+          if (dom.shopModal && dom.shopModal.style.display === 'block') showShop();
+        } catch (_) { /* ignore */ }
         return;
       }
     }
@@ -2294,6 +2312,11 @@ dom.openBtn.addEventListener('click', async () => {
     setBoxSelectionEnabled(true);
     isOpening = false;
     setSearchingState(false);
+    // Quickslots/Shop wieder freigeben
+    try {
+      renderQuickslots();
+      if (dom.shopModal && dom.shopModal.style.display === 'block') showShop();
+    } catch (_) { /* ignore */ }
     return;
   }
   // Starte Such-Animation
@@ -3118,11 +3141,12 @@ function showShop() {
     const iconHTML = renderPotionIconHTML(item.icon);
   const beltNote = (permanentUpgrades.permPotionBelt || 0) >= 1 ? `<br><span style=\"color:#f1c40f;\">+1 Aufladung pro Kauf</span>` : '';
     const priceHTML = `<span class=\"price ${!canAfford ? 'unaffordable' : ''}\">${formatNumber(item.cost)} 💰</span>`;
-    const btnClass = `upgrade-btn shop-buy-btn${canAfford ? ' affordable' : ''}`;
+    const disabled = !canAfford || isOpening; // Während Öffnung gesperrt
+    const btnClass = `upgrade-btn shop-buy-btn${(!disabled && canAfford) ? ' affordable' : ''}`;
     branch.innerHTML = `
       <h3>${iconHTML} ${item.name}</h3>
       <p class=\"skill-description\">${item.description}${usesText}${beltNote}</p>
-      <button class=\"${btnClass}\" data-item-id=\"${itemId}\" ${!canAfford ? 'disabled' : ''}>${priceHTML}</button>
+      <button class=\"${btnClass}\" data-item-id=\"${itemId}\" ${disabled ? 'disabled' : ''}>${priceHTML}</button>
     `;
     tempGrid.appendChild(branch);
   }
@@ -3147,6 +3171,11 @@ function showShop() {
 function purchaseShopItem(itemId) {
   const item = shopItems[itemId];
   if (!item) return;
+  // Tränke (temporäre Boosts) sind während einer laufenden Öffnung gesperrt
+  if (item.type === 'temp' && isOpening) {
+    alert('Während des Öffnens von Boxen können keine Tränke gekauft werden.');
+    return;
+  }
   
   // Prüfe ob genug Geld vorhanden
   if (balance < item.cost) {
