@@ -5,7 +5,9 @@ const discoveredItems = new Set();
 let lastPulledItems = new Set();
 
 // Reihenfolge der Raritäten (wird beim Ziehen verwendet)
-const rarities = ["Common", "Rare", "Epic", "Legendary", "Mythisch"];
+// Reihenfolge der Raritäten (von häufig nach extrem selten)
+// Hinweis: Schlüssel-System unterstützt nur die ersten fünf (bis Mythisch)
+const rarities = ["Common", "Rare", "Epic", "Legendary", "Mythisch", "Aetherisch"];
 
 // Farbdefinitionen pro Rarität (RGBA für einfache CSS-Nutzung)
 const colors = {
@@ -13,7 +15,8 @@ const colors = {
   Rare: "rgba(74, 144, 226, 1)",
   Epic: "rgba(155, 89, 182, 1)",
   Legendary: "rgba(241, 196, 15, 1)",
-  Mythisch: "rgba(231, 76, 60, 1)"
+  Mythisch: "rgba(231, 76, 60, 1)",
+  Aetherisch: "rgba(20, 184, 166, 1)" // kräftiges Türkis
 };
 
 // Glow-Stärken pro Rarität (0.0 - 1.0). Wird als CSS-Variable --glow-opacity auf das Item gesetzt.
@@ -22,7 +25,8 @@ const glowStrength = {
   Rare: 0.40,
   Epic: 0.60,
   Legendary: 0.80,
-  Mythisch: 1.00
+  Mythisch: 1.00,
+  Aetherisch: 1.05
 };
 
 // Bildpfad-Hilfen: Ab sofort liegen die Itembilder in Unterordnern je Rarität
@@ -38,7 +42,9 @@ const RARITY_FOLDER_MAP = {
   Rare: 'Selten',
   Epic: 'Episch',
   Legendary: 'Legendär',
-  Mythisch: 'Mythisch'
+  Mythisch: 'Mythisch',
+  // Für Aetherisch (neue Stufe) werden bis zur Bereitstellung eigener Assets Mythisch-Icons wiederverwendet
+  Aetherisch: 'Mythisch'
 };
 
 function getItemImagePath(iconFileName, rarity) {
@@ -155,7 +161,7 @@ let achievementsState = {
     boxes: 0,                // höchster erreichten Box-Meilenstein (Anzahl)
     gold: 0,                 // höchster erreichten Gold-Meilenstein (Betrag)
     collection: {            // pro Rarität: höchster Prozent-Meilenstein (0/25/50/75/100)
-      Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0
+      Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0, Aetherisch: 0
     },
     // pro Rarität: höchster erreichten Schlüssel-Meilenstein (Anzahl)
     keys: { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 }
@@ -313,6 +319,8 @@ let keysInventory = {
   Legendary: 0,
   Mythisch: 0
 };
+// Nur diese Raritäten besitzen Schlüssel (nicht: Aetherisch)
+const KEYS_RARITIES = ['Common','Rare','Epic','Legendary','Mythisch'];
 // Einmal-Flag, um die nächste Öffnung kostenlos zu machen (durch Schlüssel)
 let __nextOpenIsFree = false;
 
@@ -485,6 +493,13 @@ const itemPools = {
     { name: "Schattenmantel", icon: "Itembilder/Mythisch/schattenmantel.png", value: 90000, description: "Lässt dich im Dunkel verschwinden." },
     { name: "Zeitreisekompass", icon: "Itembilder/Mythisch/zeitkompass.png", value: 140000, description: "Zeigt nicht Norden, sondern Morgen." }
   ]
+  ,
+  Aetherisch: [
+    // Platzhalter-Items für die ultra-seltene Stufe (verwenden vorerst Mythisch-Icons)
+    { name: "Ätherischer Splitter", icon: "Itembilder/Mythisch/zeitkompass.png", value: 300000, description: "Ein Splitter reiner Ätherenergie." },
+    { name: "Ätherisches Sigill", icon: "Itembilder/Mythisch/philosophenstein.png", value: 400000, description: "Ein Siegel, das die Realität leicht verbiegt." },
+    { name: "Ätherischer Kern", icon: "Itembilder/Mythisch/aetherisches_grimoire.png", value: 500000, description: "Ein pulsierender Kern jenseitiger Macht." }
+  ]
 };
 
 // Sortiere alle Itemlisten pro Kategorie alphabetisch nach Namen (de-DE, Groß/Kleinschreibung ignoriert)
@@ -509,6 +524,45 @@ const boxConfigs = {
       Epic: 5.00,
       Legendary: 0.00,
       Mythisch: 0.00
+    }
+  },
+  "Box#8": {
+    cost: 250000,
+    columns: 6,
+    rows: 4,
+    weights: {
+      Common: 10.0,
+      Rare: 21.0,
+      Epic: 50.0,
+      Legendary: 18.0,
+      Mythisch: 1.0,
+      Aetherisch: 0.0
+    }
+  },
+  "Box#9": {
+    cost: 500000,
+    columns: 6,
+    rows: 4,
+    weights: {
+      Common: 7.0,
+      Rare: 17.0,
+      Epic: 48.0,
+      Legendary: 25.7,
+      Mythisch: 2.0,
+      Aetherisch: 0.3
+    }
+  },
+  "Box#10": {
+    cost: 1000000,
+    columns: 6,
+    rows: 4,
+    weights: {
+      Common: 4.0,
+      Rare: 12.0,
+      Epic: 44.0,
+      Legendary: 36.9,
+      Mythisch: 2.6,
+      Aetherisch: 0.5
     }
   },
   "Box#2": {
@@ -680,7 +734,7 @@ let isOpening = false;
 let pendingBoxType = null; // gewünschter Box-Wechsel, der nach Öffnung angewendet wird
 
 // Box-Reihenfolge für Progression
-const boxOrder = ["Box#1", "Box#2", "Box#3", "Box#4", "Box#5", "Box#6", "Box#7"];
+const boxOrder = ["Box#1", "Box#2", "Box#3", "Box#4", "Box#5", "Box#6", "Box#7", "Box#8", "Box#9", "Box#10"];
 
 // Anzeigenamen für die Boxen
 const boxDisplayNames = {
@@ -691,6 +745,9 @@ const boxDisplayNames = {
   "Box#5": "Militärkoffer",
   "Box#6": "Safe",
   "Box#7": "Tresor",
+  "Box#8": "Hochsicherheitstresor",
+  "Box#9": "Geheimdepot",
+  "Box#10": "Artefaktkammer",
   "Testbox": "Testbox",
   "KeyRoom_Common": "Gewöhnlicher Raum",
   "KeyRoom_Rare": "Seltener Raum",
@@ -709,6 +766,9 @@ function getBoxIcon(boxName) {
     "Box#5": "🎖️",
     "Box#6": "🔒",
     "Box#7": "🏦",
+    "Box#8": "🏛️",
+    "Box#9": "🧰",
+    "Box#10": "🗝️",
     "Testbox": "🧪",
     "KeyRoom_Common": "🚪",
     "KeyRoom_Rare": "🚪",
@@ -799,6 +859,12 @@ function applyLuckBonus(weights, boxType) {
   let boxMultiplier = 1.0;
   if (boxNumber >= 1 && boxNumber <= 7) {
     boxMultiplier = 1.1 - (boxNumber * 0.1); // Box 1: 1.0, Box 2: 0.9, ..., Box 7: 0.4
+  } else if (boxNumber === 8) {
+    boxMultiplier = 0.35;
+  } else if (boxNumber === 9) {
+    boxMultiplier = 0.30;
+  } else if (boxNumber >= 10) {
+    boxMultiplier = 0.25;
   }
 
   // Pro-Punkt-Raten: keine harten Caps mehr, damit Glück unbegrenzt skaliert
@@ -838,6 +904,7 @@ function applyLuckBonus(weights, boxType) {
     modifiedWeights.Mythisch = (modifiedWeights.Mythisch || 0) + shiftLM;
   }
 
+  // Kein automatischer Shift in Aetherisch (ultra-rare bleibt unverändert)
   return modifiedWeights;
 }
 
@@ -998,13 +1065,28 @@ function selectBox(type) {
 // Exponiere selectBox global (vorerst kompatibel)
 window.selectBox = selectBox;
 
-// Wire box button clicks via JS (statt inline onclick)
-for (let i = 0; i < boxOrder.length; i++) {
-  const btn = document.getElementById(`boxBtn${i + 1}`);
-  if (btn) {
-    btn.addEventListener('click', () => selectBox(boxOrder[i]));
+// Erzeuge fehlende Box-Buttons dynamisch und wire Clicks
+function ensureBoxButtons() {
+  const sel = document.getElementById('boxSelection');
+  if (!sel) return;
+  for (let i = 0; i < boxOrder.length; i++) {
+    const id = `boxBtn${i + 1}`;
+    let btn = document.getElementById(id);
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = id;
+      btn.dataset.box = boxOrder[i];
+      sel.appendChild(btn);
+    }
+    // Stelle sicher, dass der Klick-Handler gesetzt ist (einmalig)
+    if (!btn.__wired) {
+      btn.addEventListener('click', () => selectBox(boxOrder[i]));
+      btn.__wired = true;
+    }
   }
 }
+
+ensureBoxButtons();
 
 // Versucht, die Kosten für die aktuelle Box vom Guthaben abzuziehen.
 // Gibt true zurück, wenn erfolgreich, ansonsten false.
@@ -1587,6 +1669,7 @@ function displayRarityName(rarity) {
     case 'Epic': return 'Episch';
     case 'Legendary': return 'Legendär';
     case 'Mythisch': return 'Mythisch';
+    case 'Aetherisch': return 'Ätherisch';
     default: return rarity || '—';
   }
 }
@@ -1841,10 +1924,10 @@ function ensureKeysButton() {
   btn.addEventListener('click', (e) => {
     // DEV Komfort: Alt-Klick fügt je 1 Schlüssel hinzu (nur im DEV-Mode)
     if (e.altKey && devMode) {
-      for (const r of rarities) keysInventory[r] = (keysInventory[r] || 0) + 1;
+      for (const r of KEYS_RARITIES) keysInventory[r] = (keysInventory[r] || 0) + 1;
       saveProgress();
       // Dev-Add gilt als entdeckt
-      for (const r of rarities) discoveredKeyRarities.add(r);
+      for (const r of KEYS_RARITIES) discoveredKeyRarities.add(r);
       saveKeyDiscovery();
       renderKeysButtonBadges();
       if (__keysBadgesCollapsed) setKeysBtnNotify(true);
@@ -1864,7 +1947,7 @@ function renderKeysButtonBadges() {
   const wrap = document.createElement('span');
   wrap.className = 'key-badges';
   const abbrev = { Common: 'C', Rare: 'R', Epic: 'E', Legendary: 'L', Mythisch: 'M' };
-  for (const r of rarities) {
+  for (const r of KEYS_RARITIES) {
     const count = keysInventory[r] || 0;
     const b = document.createElement('span');
     b.className = `key-badge key-${r}`;
@@ -1950,7 +2033,7 @@ function showKeysModal() {
   infoArea.innerHTML = '';
 
   const abbrev = { Common: 'Gewöhnlich', Rare: 'Selten', Epic: 'Episch', Legendary: 'Legendär', Mythisch: 'Mythisch' };
-  for (const r of rarities) {
+  for (const r of KEYS_RARITIES) {
     const row = document.createElement('div');
     row.className = 'keys-row';
 
@@ -2076,7 +2159,7 @@ function loadKeyDiscovery() {
   } catch (_) { /* ignore */ }
   // Migration/Fallback: markiere Raritäten mit vorhandenem Bestand als entdeckt
   try {
-    for (const r of rarities) {
+    for (const r of KEYS_RARITIES) {
       if ((keysInventory[r] || 0) > 0) discoveredKeyRarities.add(r);
     }
   } catch (_) { /* ignore */ }
@@ -2613,8 +2696,8 @@ dom.openBtn.addEventListener('click', async () => {
       // Falls irgendwas schiefgeht, ignoriere das Glow-Setzen
       console.warn('Failed to set glow on item', e);
     }
-    // Unique Effekt für Legendär & Mythisch
-    if (pulledItem.rarity === 'Legendary' || pulledItem.rarity === 'Mythisch') {
+    // Unique Effekt für Legendär, Mythisch & Aetherisch
+    if (pulledItem.rarity === 'Legendary' || pulledItem.rarity === 'Mythisch' || pulledItem.rarity === 'Aetherisch') {
       triggerRarityEffect(item, pulledItem.rarity);
     }
     if (revealSlots[i].isNew) {
