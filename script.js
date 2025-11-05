@@ -3895,13 +3895,14 @@ function updatePrestigeUI() {
       const nextBonusLuck = currBonusLuck + 1;
       const cLevel = playerLevel >= MAX_LEVEL;
       const cMyth = getDiscoveredCountByRarity('Mythisch') >= 5;
-      const cBoxes = (prestigeState.runBoxesOpened || 0) >= 200;
+      const runBoxes = Math.max(0, prestigeState.runBoxesOpened || 0);
+      const cBoxes = runBoxes >= 200;
       dom.prestigeInfo.innerHTML = `
         <h3>Bedingungen</h3>
         <ul class="prestige-conds">
           <li class="${cLevel ? 'ok' : 'fail'}">- Level ${MAX_LEVEL} ${cLevel ? '✓' : ''}</li>
           <li class="${cMyth ? 'ok' : 'fail'}">- 5 Mythische Items ${cMyth ? '✓' : ''}</li>
-          <li class="${cBoxes ? 'ok' : 'fail'}">- 200 Boxen geöffnet ${cBoxes ? '✓' : ''}</li>
+          <li class="${cBoxes ? 'ok' : 'fail'}">- 200 Boxen geöffnet <span style="opacity:0.85">(${Math.min(runBoxes,200)}/200)</span> ${cBoxes ? '✓' : ''}</li>
         </ul>
         <h3>Auswirkungen</h3>
         <p>Run-Reset:</p>
