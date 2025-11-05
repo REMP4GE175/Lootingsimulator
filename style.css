@@ -984,7 +984,7 @@ body {
   pointer-events: none;
 }
 
-#collectionBtn, #statsBtn, #achievementsBtn {
+#collectionBtn, #statsBtn, #achievementsBtn, #leaderboardBtn {
   font-size: 24px;
   padding: 10px 15px;
   cursor: pointer;
@@ -996,7 +996,7 @@ body {
   min-width: 50px;
 }
 
-#collectionBtn:hover, #statsBtn:hover, #achievementsBtn:hover {
+#collectionBtn:hover, #statsBtn:hover, #achievementsBtn:hover, #leaderboardBtn:hover {
   background: rgba(255,255,255,0.08);
   border-color: #888;
   transform: scale(1.05);

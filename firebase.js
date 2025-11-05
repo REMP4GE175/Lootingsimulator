@@ -3,6 +3,7 @@
   let _app = null;
   let _auth = null;
   let _db = null;
+  let _functions = null;
   let _readyResolve;
   const _ready = new Promise(res => { _readyResolve = res; });
 
@@ -60,6 +61,7 @@
       _app = firebase.initializeApp(cfg);
       _auth = firebase.auth();
       _db = firebase.firestore();
+  _functions = firebase.functions();
 
       // Optional: enable local persistence
       try { await _db.enablePersistence({ synchronizeTabs: true }); } catch (_) {}
@@ -85,15 +87,39 @@
     const now = new Date();
     const payload = {
       lastSeenAt: now,
-      displayName: getLocalName(),
     };
     if (typeof stats === 'object' && stats) {
-      if (Number.isFinite(stats.prestigeLevel)) payload.prestigeLevel = stats.prestigeLevel;
+      if (typeof stats.displayName === 'string' && stats.displayName) payload.displayName = stats.displayName;
       if (Number.isFinite(stats.totalXP)) payload.totalXP = stats.totalXP;
       if (Number.isFinite(stats.mythicsFound)) payload.mythicsFound = stats.mythicsFound;
       if (Number.isFinite(stats.totalBoxesOpened)) payload.totalBoxesOpened = stats.totalBoxesOpened;
     }
     try { await ref.set(payload, { merge: true }); } catch (e) { console.warn('updateStats failed', e); }
+  }
+
+  async function callPrestige() {
+    if (!_functions || !_auth || !_auth.currentUser) throw new Error('Not ready');
+    try {
+      const fn = _functions.httpsCallable('submitPrestige');
+      const res = await fn({});
+      const data = res && res.data ? res.data : {};
+      return { prestigeLevel: Number(data.prestigeLevel || 0) };
+    } catch (e) {
+      console.warn('callPrestige failed', e);
+      throw e;
+    }
+  }
+
+  async function setDisplayName(displayName) {
+    if (!_functions || !_auth || !_auth.currentUser) throw new Error('Not ready');
+    try {
+      const fn = _functions.httpsCallable('setDisplayName');
+      const res = await fn({ displayName: String(displayName || '') });
+      return res && res.data ? res.data : { ok: true };
+    } catch (e) {
+      console.warn('setDisplayName failed', e);
+      throw e;
+    }
   }
 
   async function fetchGlobalLeaderboard(limit = 50) {
@@ -213,6 +239,8 @@
     removeFriend,
     fetchFriendsUids,
     getCurrentUid,
+    callPrestige,
+    setDisplayName,
   };
 
   // Start init immediately

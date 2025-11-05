@@ -1329,39 +1329,49 @@ function setDevMode(enabled) {
   updateBoxAvailability();
 }
 
-// initialize dev mode from storage
+// initialize dev mode from storage, but lock it down on production hosts
+const __isLocalhost = (typeof location !== 'undefined') && /^(localhost|127\.0\.0\.1)$/i.test(location.hostname);
 loadDevMode();
+if (!__isLocalhost) { devMode = false; saveDevMode(); }
 if (devToggleCheckbox) {
+  // Hide the toggle in production
+  if (!__isLocalhost) devToggleCheckbox.closest && devToggleCheckbox.closest('.toggle-dev') && (devToggleCheckbox.closest('.toggle-dev').style.display = 'none');
   devToggleCheckbox.addEventListener('change', (e) => {
+    if (!__isLocalhost) { e.preventDefault(); e.target.checked = false; return; }
     setDevMode(!!e.target.checked);
   });
 }
 // Apply initial state to UI
 setDevMode(devMode);
 
-// Secret title toggle (press-and-hold on the hidden 'o' for 1s)
+// Secret title toggle (press-and-hold on the hidden 'o' for 1s) — disabled on production hosts
 try {
   const secret = document.getElementById('secretDevSwitch');
   if (secret) {
-    let holdTimer = null;
-    const startHold = () => {
-      if (holdTimer) clearTimeout(holdTimer);
-      holdTimer = setTimeout(() => {
-        setDevMode(!devMode);
-        try { console.log(`DEV ${devMode ? 'enabled' : 'disabled'}`); } catch (_) {}
-      }, 1000); // 1s hold
-    };
-    const cancelHold = () => {
-      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
-    };
-    // Mouse events
-    secret.addEventListener('mousedown', startHold);
-    secret.addEventListener('mouseup', cancelHold);
-    secret.addEventListener('mouseleave', cancelHold);
-    // Touch events
-    secret.addEventListener('touchstart', (e) => { startHold(); }, { passive: true });
-    secret.addEventListener('touchend', cancelHold, { passive: true });
-    secret.addEventListener('touchcancel', cancelHold, { passive: true });
+    if (!__isLocalhost) {
+      // Hide indicator and ignore interactions in production
+      secret.style.pointerEvents = 'none';
+    } else {
+      let holdTimer = null;
+      const startHold = () => {
+        if (holdTimer) clearTimeout(holdTimer);
+        holdTimer = setTimeout(() => {
+          setDevMode(!devMode);
+          try { console.log(`DEV ${devMode ? 'enabled' : 'disabled'}`); } catch (_) {}
+        }, 1000); // 1s hold
+      };
+      const cancelHold = () => {
+        if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      };
+      // Mouse events
+      secret.addEventListener('mousedown', startHold);
+      secret.addEventListener('mouseup', cancelHold);
+      secret.addEventListener('mouseleave', cancelHold);
+      // Touch events
+      secret.addEventListener('touchstart', (e) => { startHold(); }, { passive: true });
+      secret.addEventListener('touchend', cancelHold, { passive: true });
+      secret.addEventListener('touchcancel', cancelHold, { passive: true });
+    }
   }
 } catch (_) { /* ignore */ }
 
@@ -4033,8 +4043,42 @@ function doPrestige() {
     return;
   }
 
-  // Steigere Prestige-Stufe
+  // Vor dem Server-Call: letzte Stats hochschieben, damit der Server valide prüfen kann
+  try {
+    if (window.firebaseApi && typeof window.firebaseApi.updateStats === 'function') {
+      const mythCount = Math.max(0, getDiscoveredCountByRarity('Mythisch') || 0);
+      const payload = {
+        totalXP: Number(playerXP || 0),
+        mythicsFound: Number(mythCount || 0),
+        totalBoxesOpened: Number((stats && stats.totalBoxesOpened) || 0),
+      };
+      window.firebaseApi.updateStats(payload);
+    }
+  } catch (_) { /* ignore */ }
+
+  // Server-seitige Prestige-Erhöhung (Cloud Function)
+  try {
+    if (window.firebaseApi && typeof window.firebaseApi.callPrestige === 'function') {
+      // block UI minimal, optional: add spinner later
+      const res = window.firebaseApi.callPrestige();
+      // await result synchron synchronously before mutating local state
+      return Promise.resolve(res).then(({ prestigeLevel }) => {
+        prestigeState.level = Number(prestigeLevel || ((prestigeState.level||0)+1));
+        // Danach lokalen Reset durchführen
+        proceedAfterPrestige();
+      }).catch((e)=>{
+        alert('Prestige fehlgeschlagen (Server). Bitte später erneut versuchen.');
+        console.warn('Prestige server failed', e);
+      });
+    }
+  } catch (_) { /* ignore */ }
+
+  // Fallback: lokal erhöhen (offline)
   prestigeState.level = (prestigeState.level || 0) + 1;
+  proceedAfterPrestige();
+}
+
+function proceedAfterPrestige() {
   // Zähler für "seit letztem Prestige" zurücksetzen
   prestigeState.runBoxesOpened = 0;
 
@@ -4120,6 +4164,14 @@ updatePrestigeUI();
           <button class="lb-tab ${active==='global'?'active':''}" data-tab="global">Global</button>
           <button class="lb-tab ${active==='friends'?'active':''}" data-tab="friends">Freunde</button>
         </div>
+        <div id="lbProfile" style="margin:10px 0; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <span style="opacity:.85">Dein Name:</span>
+          <input id="lbNameInput" type="text" maxlength="24" placeholder="z.B. Anon-1234" style="flex:1;min-width:180px;" />
+          <button id="saveLbNameBtn">Speichern</button>
+          <span style="opacity:.85">UID:</span>
+          <code id="lbUid">—</code>
+          <button id="copyUidBtn" title="UID in Zwischenablage kopieren">Kopieren</button>
+        </div>
         <div id="lbView"></div>
         <div id="lbFriendsTools" style="display:${active==='friends'?'block':'none'};margin-top:10px;">
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -4129,6 +4181,7 @@ updatePrestigeUI();
           <div id="friendsList" style="margin-top:8px;"></div>
         </div>`;
       lbContent.innerHTML = html;
+      attachProfileTools();
       Array.from(lbContent.querySelectorAll('.lb-tab')).forEach(btn => {
         btn.addEventListener('click', () => {
           renderTabs(btn.dataset.tab);
@@ -4204,6 +4257,79 @@ updatePrestigeUI();
       } catch (e) { view.innerHTML = '<p>Fehler beim Laden.</p>'; console.warn(e); }
     }
 
+    function attachProfileTools() {
+      try {
+        const nameInput = document.getElementById('lbNameInput');
+        const saveBtn = document.getElementById('saveLbNameBtn');
+        const uidEl = document.getElementById('lbUid');
+        const copyBtn = document.getElementById('copyUidBtn');
+
+        // Prefill name from localStorage (same key used by firebase.js)
+        try {
+          const stored = localStorage.getItem('lootsim_playerDisplayName');
+          if (stored && nameInput) nameInput.value = stored;
+        } catch (_) {}
+
+        // Fill UID
+        try {
+          if (window.firebaseApi && typeof window.firebaseApi.getCurrentUid === 'function') {
+            const uid = window.firebaseApi.getCurrentUid();
+            if (uid && uidEl) uidEl.textContent = uid;
+          }
+        } catch (_) {}
+
+        if (copyBtn) {
+          copyBtn.addEventListener('click', async () => {
+            try {
+              const txt = uidEl && uidEl.textContent ? uidEl.textContent : '';
+              if (txt) await navigator.clipboard.writeText(txt);
+              copyBtn.textContent = 'Kopiert!';
+              setTimeout(() => { copyBtn.textContent = 'Kopieren'; }, 1200);
+            } catch (_) {}
+          });
+        }
+
+        if (saveBtn && nameInput) {
+          const doSave = async () => {
+            try {
+              let v = (nameInput.value || '').trim();
+              // Sanitize: allow letters (incl. diacritics), digits, space, underscore, dash
+              try { v = v.replace(/[^\p{L}\p{N} _-]/gu, ''); } catch (_) { v = v.replace(/[^A-Za-z0-9 _-]/g, ''); }
+              if (v.length < 3) v = v.padEnd(3, '_');
+              if (v.length > 24) v = v.slice(0, 24);
+
+              // Prefer server-side callable to set name fairly
+              let storedName = v;
+              let usedCallable = false;
+              try {
+                if (window.firebaseApi && typeof window.firebaseApi.setDisplayName === 'function') {
+                  usedCallable = true;
+                  const res = await window.firebaseApi.setDisplayName(v);
+                  if (res && res.displayName) storedName = String(res.displayName);
+                }
+              } catch (e) {
+                // Will fallback to client-side storage + stats update
+              }
+
+              try { localStorage.setItem('lootsim_playerDisplayName', storedName); } catch (_) {}
+
+              if (!usedCallable) {
+                // Fallback: write a stats update with displayName so name propagates (non-authoritative)
+                if (window.firebaseApi && typeof window.firebaseApi.updateStats === 'function') {
+                  window.firebaseApi.updateStats({ displayName: storedName });
+                }
+              }
+
+              saveBtn.textContent = 'Gespeichert ✓';
+              setTimeout(() => { saveBtn.textContent = 'Speichern'; }, 1200);
+            } catch (_) {}
+          };
+          saveBtn.addEventListener('click', doSave);
+          nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSave(); });
+        }
+      } catch (_) {}
+    }
+
     if (lbBtn) lbBtn.addEventListener('click', () => {
       if (!lbModal) return;
       lbModal.style.display = 'block';
@@ -4244,17 +4370,6 @@ updatePrestigeUI();
       if (el && ver) {
         el.textContent = 'v' + ver;
         el.setAttribute('aria-label', 'Version ' + ver);
-
-        // Update global leaderboard stats (prestige level)
-        try {
-          if (window.firebaseApi && typeof window.firebaseApi.updateStats === 'function') {
-            window.firebaseApi.updateStats({
-              prestigeLevel: prestigeState.level || 0,
-              totalXP: Number(playerXP || 0),
-              totalBoxesOpened: Number((stats && stats.totalBoxesOpened) || 0),
-            });
-          }
-        } catch (_) { /* ignore */ }
       }
     } catch (_) { /* ignore */ }
   }
