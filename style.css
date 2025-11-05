@@ -984,7 +984,7 @@ body {
   pointer-events: none;
 }
 
-#collectionBtn, #statsBtn, #achievementsBtn, #exportBtn, #importBtn {
+#collectionBtn, #statsBtn, #achievementsBtn {
   font-size: 24px;
   padding: 10px 15px;
   cursor: pointer;
@@ -996,17 +996,10 @@ body {
   min-width: 50px;
 }
 
-#collectionBtn:hover, #statsBtn:hover, #achievementsBtn:hover, #exportBtn:hover, #importBtn:hover {
+#collectionBtn:hover, #statsBtn:hover, #achievementsBtn:hover {
   background: rgba(255,255,255,0.08);
   border-color: #888;
   transform: scale(1.05);
-}
-
-/* Make Export/Import buttons slimmer (same design, less width) */
-#exportBtn,
-#importBtn {
-  padding: 6px 10px; /* narrower than the others */
-  min-width: 38px;  /* reduce minimal width */
 }
 
 #devMoneyBtn {
@@ -1304,6 +1297,21 @@ body {
 #prestigeBtn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* Glow when prestige is possible */
+#prestigeBtn.prestige-ready {
+  animation: prestigeGlow 1.4s ease-in-out infinite;
+  box-shadow: 0 0 12px rgba(241,196,15,0.55), 0 0 24px rgba(241,196,15,0.35);
+  transform: translateY(-1px);
+}
+#prestigeBtn.prestige-ready .prestige-star .star {
+  filter: drop-shadow(0 0 10px rgba(241,196,15,0.95));
+}
+
+@keyframes prestigeGlow {
+  0%, 100% { box-shadow: 0 0 10px rgba(241,196,15,0.45), 0 0 20px rgba(241,196,15,0.25); }
+  50% { box-shadow: 0 0 22px rgba(241,196,15,0.95), 0 0 34px rgba(243,156,18,0.65); }
 }
 .prestige-badge {
   background: rgba(255,255,255,0.08);

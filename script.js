@@ -1260,6 +1260,11 @@ function updateSoundVolume() {
   if (searchingSound) {
     searchingSound.volume = effectiveVolume;
   }
+  try {
+    if (__masterGain && __audioCtx) {
+      __masterGain.gain.setValueAtTime(effectiveVolume, __audioCtx.currentTime);
+    }
+  } catch (_) { /* ignore */ }
 }
 
 // Suche-Animation: spielt Sound beim Durchsuchen ab
@@ -1466,11 +1471,19 @@ function attachTooltip(el, dataProvider) {
 
 // ======= Rarity Reveal Effects (Visual + Audio) =======
 let __audioCtx = null;
+let __masterGain = null;
 function ensureAudioCtx() {
   try {
     if (!__audioCtx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (AudioCtx) __audioCtx = new AudioCtx();
+      if (AudioCtx) {
+        __audioCtx = new AudioCtx();
+        try {
+          __masterGain = __audioCtx.createGain();
+          __masterGain.gain.setValueAtTime((isMuted ? 0 : globalVolume), __audioCtx.currentTime);
+          __masterGain.connect(__audioCtx.destination);
+        } catch (_) { __masterGain = null; }
+      }
     }
   } catch (e) {
     // ignore
@@ -1481,6 +1494,7 @@ function ensureAudioCtx() {
 function playRaritySound(rarity) {
   const ctx = ensureAudioCtx();
   if (!ctx) return;
+  if (isMuted) return;
   const now = ctx.currentTime;
   const duration = rarity === 'Mythisch' ? 0.35 : 0.22;
   const baseFreq = rarity === 'Mythisch' ? 1046.5 : 880; // C6 vs A5
@@ -1491,7 +1505,11 @@ function playRaritySound(rarity) {
   gain.gain.setValueAtTime(0.0001, now);
   gain.gain.linearRampToValueAtTime(0.12, now + 0.02);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-  osc.connect(gain).connect(ctx.destination);
+  if (__masterGain) {
+    osc.connect(gain).connect(__masterGain);
+  } else {
+    osc.connect(gain).connect(ctx.destination);
+  }
   osc.start(now);
   osc.stop(now + duration + 0.02);
 
@@ -1504,7 +1522,11 @@ function playRaritySound(rarity) {
     gain2.gain.setValueAtTime(0.0001, now + 0.03);
     gain2.gain.linearRampToValueAtTime(0.08, now + 0.08);
     gain2.gain.exponentialRampToValueAtTime(0.0001, now + duration + 0.08);
-    osc2.connect(gain2).connect(ctx.destination);
+    if (__masterGain) {
+      osc2.connect(gain2).connect(__masterGain);
+    } else {
+      osc2.connect(gain2).connect(ctx.destination);
+    }
     osc2.start(now + 0.03);
     osc2.stop(now + duration + 0.12);
   }
@@ -2663,6 +2685,8 @@ dom.openBtn.addEventListener('click', async () => {
   updateOpenBtnIcon();
   // Nach Abschluss erneut prüfen, falls während der Öffnung weitere Boxen gezählt wurden
   updateAchievementsNotify();
+  // Nach jedem Öffnen: Prestige-Bedingungen erneut prüfen (Glow)
+  try { updatePrestigeUI(); } catch (_) {}
 
   // Falls während der Öffnung eine andere Box gewählt wurde, jetzt anwenden
   if (pendingBoxType) {
@@ -2703,6 +2727,8 @@ function addXP(amount) {
   }
   
   updateLevelUI();
+  // Prestige-UI ggf. aktualisieren (Glow, wenn Bedingungen erfüllt)
+  try { updatePrestigeUI(); } catch (_) {}
   saveProgress(); // Speichere bei Level/XP-Änderung
   
   // Info-Modal aktualisieren falls geöffnet
@@ -3932,6 +3958,7 @@ function updatePrestigeUI() {
       dom.prestigeBtn.title = canPrestige()
         ? 'Meta-Boni & Reset'
         : `Erreiche Level ${MAX_LEVEL} (Meta-Boni & Reset)`;
+      try { dom.prestigeBtn.classList.toggle('prestige-ready', !!canPrestige()); } catch (_) {}
     }
     if (dom.prestigeInfo) {
       const nextLvl = (prestigeState.level || 0) + 1;
@@ -4079,6 +4106,131 @@ if (dom.confirmPrestigeBtn) {
 // Initial Prestige-UI Sync
 updatePrestigeUI();
 
+// ======= Leaderboard (Firebase) =======
+(function initLeaderboard() {
+  try {
+    const lbBtn = document.getElementById('leaderboardBtn');
+    const lbModal = document.getElementById('leaderboardModal');
+    const lbClose = document.getElementById('closeLeaderboardBtn');
+    const lbContent = document.getElementById('leaderboardContent');
+
+    function renderTabs(active) {
+      const html = `
+        <div class="lb-tabs">
+          <button class="lb-tab ${active==='global'?'active':''}" data-tab="global">Global</button>
+          <button class="lb-tab ${active==='friends'?'active':''}" data-tab="friends">Freunde</button>
+        </div>
+        <div id="lbView"></div>
+        <div id="lbFriendsTools" style="display:${active==='friends'?'block':'none'};margin-top:10px;">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input id="friendUidInput" type="text" placeholder="Freund UID hinzufügen" style="flex:1;min-width:240px;" />
+            <button id="addFriendBtn">Hinzufügen</button>
+          </div>
+          <div id="friendsList" style="margin-top:8px;"></div>
+        </div>`;
+      lbContent.innerHTML = html;
+      Array.from(lbContent.querySelectorAll('.lb-tab')).forEach(btn => {
+        btn.addEventListener('click', () => {
+          renderTabs(btn.dataset.tab);
+          if (btn.dataset.tab === 'global') renderGlobal(); else renderFriends();
+        });
+      });
+      if (active === 'friends') attachFriendsTools();
+    }
+
+    async function renderGlobal() {
+      const view = document.getElementById('lbView'); if (!view) return;
+      view.innerHTML = '<p>Laden…</p>';
+      try {
+        if (window.firebaseApi && typeof window.firebaseApi.ready === 'function') await window.firebaseApi.ready();
+        const rows = (window.firebaseApi && typeof window.firebaseApi.fetchGlobalLeaderboard === 'function') ? await window.firebaseApi.fetchGlobalLeaderboard(50) : [];
+        view.innerHTML = renderRowsOrEmpty(rows);
+      } catch (e) { view.innerHTML = '<p>Fehler beim Laden.</p>'; console.warn(e); }
+    }
+
+    function renderRowsOrEmpty(rows) {
+      if (!rows || rows.length === 0) return '<p>Keine Einträge (oder nicht verbunden).</p>';
+      const ol = document.createElement('ol');
+      ol.style.textAlign = 'left';
+      rows.forEach(r => {
+        const li = document.createElement('li');
+        li.textContent = `${r.displayName || 'Anon'} — Prestige ${r.prestigeLevel || 0}`;
+        ol.appendChild(li);
+      });
+      const wrap = document.createElement('div');
+      wrap.appendChild(ol);
+      return wrap.innerHTML;
+    }
+
+    async function attachFriendsTools() {
+      const input = document.getElementById('friendUidInput');
+      const addBtn = document.getElementById('addFriendBtn');
+      const list = document.getElementById('friendsList');
+      async function refreshList() {
+        if (!list) return;
+        list.innerHTML = 'Lade Freunde…';
+        try {
+          if (window.firebaseApi && typeof window.firebaseApi.ready === 'function') await window.firebaseApi.ready();
+          const ids = (window.firebaseApi && typeof window.firebaseApi.fetchFriendsUids === 'function') ? await window.firebaseApi.fetchFriendsUids() : [];
+          if (!ids || ids.length === 0) { list.textContent = 'Keine Freunde hinzugefügt.'; return; }
+          const container = document.createElement('div');
+          ids.forEach(id => {
+            const row = document.createElement('div');
+            row.style.display = 'flex'; row.style.gap = '8px'; row.style.alignItems = 'center'; row.style.margin = '4px 0';
+            const code = document.createElement('code'); code.textContent = id; code.style.flex = '1';
+            const rm = document.createElement('button'); rm.textContent = 'Entfernen';
+            rm.addEventListener('click', async () => { try { await window.firebaseApi.removeFriend(id); refreshList(); renderFriends(); } catch(_){} });
+            row.appendChild(code); row.appendChild(rm); container.appendChild(row);
+          });
+          list.innerHTML = ''; list.appendChild(container);
+        } catch (e) { list.textContent = 'Fehler beim Laden.'; }
+      }
+      if (addBtn && input) {
+        addBtn.addEventListener('click', async () => {
+          const v = (input.value || '').trim(); if (!v) return;
+          try { await window.firebaseApi.addFriend(v); input.value=''; refreshList(); renderFriends(); } catch(_){}
+        });
+      }
+      refreshList();
+    }
+
+    async function renderFriends() {
+      const view = document.getElementById('lbView'); if (!view) return;
+      view.innerHTML = '<p>Laden…</p>';
+      try {
+        if (window.firebaseApi && typeof window.firebaseApi.ready === 'function') await window.firebaseApi.ready();
+        const rows = (window.firebaseApi && typeof window.firebaseApi.fetchFriendsLeaderboard === 'function') ? await window.firebaseApi.fetchFriendsLeaderboard(50) : [];
+        view.innerHTML = renderRowsOrEmpty(rows);
+      } catch (e) { view.innerHTML = '<p>Fehler beim Laden.</p>'; console.warn(e); }
+    }
+
+    if (lbBtn) lbBtn.addEventListener('click', () => {
+      if (!lbModal) return;
+      lbModal.style.display = 'block';
+      renderTabs('global');
+      renderGlobal();
+    });
+    if (lbClose) lbClose.addEventListener('click', () => { if (lbModal) lbModal.style.display = 'none'; });
+    if (lbModal) lbModal.addEventListener('click', (e) => { if (e.target === lbModal) lbModal.style.display = 'none'; });
+
+    // Initial write to ensure user exists and stats are visible
+    try {
+      const payload = {
+        prestigeLevel: (prestigeState && Number.isFinite(prestigeState.level)) ? prestigeState.level : 0,
+        totalXP: Number(playerXP || 0),
+        totalBoxesOpened: Number((stats && stats.totalBoxesOpened) || 0),
+      };
+      if (window.firebaseApi && typeof window.firebaseApi.ready === 'function') {
+        window.firebaseApi.ready().then(() => {
+          if (window.firebaseApi && typeof window.firebaseApi.updateStats === 'function') {
+            window.firebaseApi.updateStats(payload);
+          }
+        });
+      }
+    } catch (_) { /* ignore */ }
+  } catch (_) { /* ignore */ }
+})();
+
 // ======= App-Version laden und anzeigen + Update-Checker =======
 (function setupVersioning() {
   const VERSION_URL = 'version.json';
@@ -4092,6 +4244,17 @@ updatePrestigeUI();
       if (el && ver) {
         el.textContent = 'v' + ver;
         el.setAttribute('aria-label', 'Version ' + ver);
+
+        // Update global leaderboard stats (prestige level)
+        try {
+          if (window.firebaseApi && typeof window.firebaseApi.updateStats === 'function') {
+            window.firebaseApi.updateStats({
+              prestigeLevel: prestigeState.level || 0,
+              totalXP: Number(playerXP || 0),
+              totalBoxesOpened: Number((stats && stats.totalBoxesOpened) || 0),
+            });
+          }
+        } catch (_) { /* ignore */ }
       }
     } catch (_) { /* ignore */ }
   }
@@ -4252,149 +4415,4 @@ updatePrestigeUI();
   });
 })();
 
-// ======= Export/Import Spielstand =======
-(function initExportImport() {
-  const exportBtn = document.getElementById('exportBtn');
-  const importBtn = document.getElementById('importBtn');
-  const importFile = document.getElementById('importFile');
-
-  if (!exportBtn || !importBtn || !importFile) return;
-
-  function formatTimestamp(d = new Date()) {
-    const pad = (n) => String(n).padStart(2, '0');
-    const yyyy = d.getFullYear();
-    const MM = pad(d.getMonth() + 1);
-    const dd = pad(d.getDate());
-    const HH = pad(d.getHours());
-    const mm = pad(d.getMinutes());
-    return `${yyyy}${MM}${dd}-${HH}${mm}`;
-  }
-
-  function collectSaveSnapshot() {
-    // Fortschritt aus Speicherstruktur zusammenstellen
-    const progress = {
-      balance,
-      playerLevel,
-      playerXP,
-      skillPoints,
-      skills: { ...skills },
-      boxType,
-      unlockedBoxes: Array.from(unlockedBoxes || new Set()),
-      stats: { ...stats },
-      achievementsState: { ...achievementsState },
-      activeBoosts: { ...(typeof activeBoosts === 'object' ? activeBoosts : {}) },
-      permanentUpgrades: { ...(typeof permanentUpgrades === 'object' ? permanentUpgrades : {}) },
-      purchasedItems: Array.from(purchasedItems || new Set()),
-      statUpgradesLevels: { ...(typeof statUpgradesLevels === 'object' ? statUpgradesLevels : {}) },
-      keysInventory: { ...keysInventory },
-      prestigeState: { ...(typeof prestigeState === 'object' ? prestigeState : { level: 0 }) }
-    };
-      try {
-        const rbo = parseInt(progress.prestigeState.runBoxesOpened, 10);
-        prestigeState.runBoxesOpened = isFinite(rbo) && rbo >= 0 ? rbo : 0;
-      } catch (_) {
-        prestigeState.runBoxesOpened = 0;
-      }
-
-    const counts = { ...itemCounts };
-    const discovered = Array.from(discoveredItems);
-    const discoveredKeys = Array.from(discoveredKeyRarities || new Set());
-
-    // Settings
-    const soundSettings = { muted: !!isMuted, volume: Number(globalVolume || 0) };
-    const dev = !!devMode;
-    const keysBadgesCollapsed = !!__keysBadgesCollapsed;
-
-    const snapshot = {
-      meta: {
-        app: 'Lootingsimulator',
-        version: (typeof window !== 'undefined' && window.__appVersion) ? window.__appVersion : null,
-        savedAt: new Date().toISOString()
-      },
-      data: {
-        progress,
-        counts,
-        discovered,
-        discoveredKeys,
-        settings: { soundSettings, devMode: dev, keysBadgesCollapsed }
-      }
-    };
-    return snapshot;
-  }
-
-  function downloadJSON(obj, filename) {
-    const json = JSON.stringify(obj, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      URL.revokeObjectURL(url);
-      a.remove();
-    }, 0);
-  }
-
-  exportBtn.addEventListener('click', () => {
-    try {
-      const snapshot = collectSaveSnapshot();
-      const fname = `lootingsim-save-${formatTimestamp()}.json`;
-      downloadJSON(snapshot, fname);
-    } catch (e) {
-      alert('Export fehlgeschlagen: ' + (e && e.message ? e.message : e));
-    }
-  });
-
-  importBtn.addEventListener('click', () => {
-    importFile.value = '';
-    importFile.click();
-  });
-
-  importFile.addEventListener('change', () => {
-    const file = importFile.files && importFile.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const text = String(reader.result || '');
-        const parsed = JSON.parse(text);
-        if (!parsed || !parsed.data) throw new Error('Ungültiges Save-Format');
-        const d = parsed.data;
-
-        // Minimal-Validierung
-        if (!d.progress || !d.counts) throw new Error('Datenfelder fehlen (progress/counts)');
-
-        // In localStorage schreiben (nutzt bestehende Ladepfade beim Reload)
-        try {
-          localStorage.setItem('lootsim_itemCounts_v1', JSON.stringify(d.counts));
-          localStorage.setItem('lootsim_progress_v1', JSON.stringify(d.progress));
-          if (Array.isArray(d.discoveredKeys)) {
-            localStorage.setItem('lootsim_keyDiscovery_v1', JSON.stringify(d.discoveredKeys));
-          }
-          if (d.settings && d.settings.soundSettings) {
-            localStorage.setItem('soundSettings', JSON.stringify(d.settings.soundSettings));
-          }
-          if (d.settings && typeof d.settings.devMode === 'boolean') {
-            localStorage.setItem('lootsim_devMode_v1', d.settings.devMode ? '1' : '0');
-          }
-          if (d.settings && typeof d.settings.keysBadgesCollapsed === 'boolean') {
-            localStorage.setItem('lootsim_keysBadgesCollapsed_v1', d.settings.keysBadgesCollapsed ? '1' : '0');
-          }
-          // Prestige-State ist Teil von progress und wird über PROGRESS_KEY übernommen
-        } catch (e) {
-          console.warn('Konnte nicht in localStorage schreiben', e);
-          throw e;
-        }
-
-        // Sanfter Reload, damit alle Strukturen korrekt initialisiert werden
-        location.reload();
-      } catch (e) {
-        alert('Import fehlgeschlagen: ' + (e && e.message ? e.message : e));
-      }
-    };
-    reader.onerror = () => alert('Datei konnte nicht gelesen werden.');
-    reader.readAsText(file, 'utf-8');
-  });
-})();
+// (Export/Import entfernt)

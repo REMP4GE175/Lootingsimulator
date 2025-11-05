@@ -3,6 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <title>Lootcontainer-Simulator</title>
+  <!-- Firebase SDKs (Compat for simplicity) -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <!-- Project config (create firebase-config.js with your project keys) -->
+  <script src="firebase-config.js"></script>
+  <!-- Firebase helper for this app -->
+  <script src="firebase.js"></script>
   <script>
     (function() {
       function inject(ver) {
@@ -77,11 +85,8 @@
         <button id="achievementsBtn" title="Erfolge">🏆</button>
         <button id="statsBtn" title="Statistiken">📊</button>
         <button id="collectionBtn" title="Sammlung">📚</button>
+        <button id="leaderboardBtn" title="Leaderboard (Prestige)">🏅</button>
         <button id="devMoneyBtn" title="DEV: +1M 💰">💸</button>
-        <!-- Export/Import Spielstand -->
-        <button id="exportBtn" title="Spielstand exportieren">⬇️</button>
-        <button id="importBtn" title="Spielstand importieren">⬆️</button>
-        <input id="importFile" type="file" accept="application/json" style="display:none" />
       </div>
         <div id="devToggleWrapper">
           <label class="toggle-dev">
@@ -201,6 +206,15 @@
     </div>
   </div>
   
+</div>
+
+<!-- Leaderboard Modal -->
+<div id="leaderboardModal" style="display:none;" class="overlay">
+  <div class="modal-content skill-modal">
+    <button id="closeLeaderboardBtn" class="close-btn">❌</button>
+    <h2>🏅 Leaderboard (Prestige)</h2>
+    <div id="leaderboardContent"></div>
+  </div>
 </div>
 
   
