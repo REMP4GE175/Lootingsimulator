@@ -2171,6 +2171,14 @@ function loadProgress() {
       } catch (_) {
         prestigeState.level = 0;
       }
+      // Run-Box-Zähler laden (falls vorhanden)
+      try {
+        const rbo = parseInt(progress.prestigeState.runBoxesOpened, 10);
+        prestigeState.runBoxesOpened = isFinite(rbo) && rbo >= 0 ? rbo : (prestigeState.runBoxesOpened || 0);
+      } catch (_) {
+        // falls altes Save ohne Feld: bisherigen Wert beibehalten (Default 0)
+        prestigeState.runBoxesOpened = prestigeState.runBoxesOpened || 0;
+      }
     }
   } catch (e) {
     console.warn('Failed to load progress', e);
