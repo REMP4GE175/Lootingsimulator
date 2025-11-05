@@ -1,4 +1,5 @@
-const functions = require('firebase-functions');
+// Pin to 1st Gen to avoid accidental 2nd Gen migration during upgrade
+const functions = require('firebase-functions/v1');
 const admin = require('firebase-admin');
 
 try { admin.initializeApp(); } catch (_) {}

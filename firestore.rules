@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Public readable leaderboard; users can only write safe fields on their own profile
+    match /users/{uid} {
+      allow read: if true;
+
+      // Allow initial create for the authenticated user
+      allow create: if request.auth != null && request.auth.uid == uid;
+
+      // Allow limited updates by the document owner only
+      allow update: if request.auth != null
+                    && request.auth.uid == uid
+                    // Only allow client to update these fields
+                    && request.resource.data.keys().hasOnly([
+                      'displayName',
+                      'totalXP',
+                      'mythicsFound',
+                      'totalBoxesOpened',
+                      'createdAt',
+                      'lastSeenAt'
+                    ])
+                    // Do NOT allow client to change server-maintained prestige fields
+                    && request.resource.data.prestigeLevel == resource.data.prestigeLevel
+                    && request.resource.data.lastPrestigeBoxesOpened == resource.data.lastPrestigeBoxesOpened
+                    // Basic type checks
+                    && (('displayName' in request.resource.data) ? (request.resource.data.displayName is string) : true)
+                    && (('totalXP' in request.resource.data) ? (request.resource.data.totalXP is int) : true)
+                    && (('mythicsFound' in request.resource.data) ? (request.resource.data.mythicsFound is int) : true)
+                    && (('totalBoxesOpened' in request.resource.data) ? (request.resource.data.totalBoxesOpened is int) : true);
+
+      // Friends subcollection: user may manage their own friends list
+      match /friends/{friendUid} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+  }
+}
