@@ -1986,10 +1986,17 @@ body {
 }
 
 @media (max-width: 480px) {
-  #actionButtons { grid-template-columns: 1fr; gap: 8px; }
-  #leftActions { grid-column: 1; justify-self: center; }
-  #openBtn { grid-column: 1; width: 100%; }
-  #keysBtn { grid-column: 1; justify-self: center; }
+  /* Zwei Spalten oben (Shop/Keys), darunter der Öffnen-Button über volle Breite */
+  #actionButtons {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "left keys"
+      "open open";
+    gap: 8px;
+  }
+  #leftActions { grid-area: left; justify-self: center; }
+  #keysBtn { grid-area: keys; justify-self: center; }
+  #openBtn { grid-area: open; width: 100%; }
 
   .quickslot-btn { width: 32px; height: 32px; }
   .quickslot-btn .potion-icon { width: 22px; height: 22px; }
@@ -2001,4 +2008,35 @@ body {
   .volume-slider { min-width: 160px; }
 
   .lb-tab { font-size: 13px; }
+}
+
+/* Scroll-Hinweis fürs Leaderboard (mobil) */
+.lb-scroll-hint {
+  position: fixed;
+  left: 50%;
+  top: 58%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.6);
+  border: 1px solid #555;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 999px;
+  z-index: 6000;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+.lb-scroll-hint .icon {
+  font-size: 20px;
+  animation: hintPulse 1.2s ease-in-out infinite;
+}
+.lb-scroll-hint.show { display: inline-flex; }
+@keyframes hintPulse {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
+}
+@media (min-width: 769px) {
+  .lb-scroll-hint { display: none !important; }
 }
