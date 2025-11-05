@@ -116,7 +116,9 @@ let skillPoints = 0;
 // Prestige-System: globale, dauerhafte Meta-Progression
 // Jede Prestige-Stufe verleiht: +5% Itemwert (stackt) und +1 Glück (stackt)
 let prestigeState = {
-  level: 0
+  level: 0,
+  // Anzahl geöffneter Boxen seit dem letzten Prestige (für die 200er-Bedingung)
+  runBoxesOpened: 0
 };
 
 // Skill-Tree: 3 Zweige mit jeweils maximal 20/20/10 Punkten
@@ -2327,6 +2329,8 @@ dom.openBtn.addEventListener('click', async () => {
 
   // Statistiken aktualisieren
   stats.totalBoxesOpened++;
+  // Run-Zähler: Boxen seit letztem Prestige
+  prestigeState.runBoxesOpened = (prestigeState.runBoxesOpened || 0) + 1;
   stats.boxOpenCounts[openBoxType]++;
   stats.totalItemsPulled += itemCount;
   // Prüfe auf neue (ungesehene) Erfolge
@@ -3867,7 +3871,8 @@ function getDiscoveredCountByRarity(rarity) {
 function canPrestige() {
   const hasLevel = playerLevel >= MAX_LEVEL;
   const hasMyth = getDiscoveredCountByRarity('Mythisch') >= 5;
-  const hasBoxes = (stats.totalBoxesOpened || 0) >= 200;
+  // Bedingung: 200 Boxen seit letztem Prestige (nicht Lifetime)
+  const hasBoxes = (prestigeState.runBoxesOpened || 0) >= 200;
   return hasLevel && hasMyth && hasBoxes;
 }
 
@@ -3890,7 +3895,7 @@ function updatePrestigeUI() {
       const nextBonusLuck = currBonusLuck + 1;
       const cLevel = playerLevel >= MAX_LEVEL;
       const cMyth = getDiscoveredCountByRarity('Mythisch') >= 5;
-      const cBoxes = (stats.totalBoxesOpened || 0) >= 200;
+      const cBoxes = (prestigeState.runBoxesOpened || 0) >= 200;
       dom.prestigeInfo.innerHTML = `
         <h3>Bedingungen</h3>
         <ul class="prestige-conds">
@@ -3955,6 +3960,8 @@ function doPrestige() {
 
   // Steigere Prestige-Stufe
   prestigeState.level = (prestigeState.level || 0) + 1;
+  // Zähler für "seit letztem Prestige" zurücksetzen
+  prestigeState.runBoxesOpened = 0;
 
   // Reset: Progress und Run-bezogene Strukturen
   balance = 500;
@@ -4224,6 +4231,12 @@ updatePrestigeUI();
       keysInventory: { ...keysInventory },
       prestigeState: { ...(typeof prestigeState === 'object' ? prestigeState : { level: 0 }) }
     };
+      try {
+        const rbo = parseInt(progress.prestigeState.runBoxesOpened, 10);
+        prestigeState.runBoxesOpened = isFinite(rbo) && rbo >= 0 ? rbo : 0;
+      } catch (_) {
+        prestigeState.runBoxesOpened = 0;
+      }
 
     const counts = { ...itemCounts };
     const discovered = Array.from(discoveredItems);
