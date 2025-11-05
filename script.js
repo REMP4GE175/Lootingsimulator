@@ -707,8 +707,9 @@ const boxConfigs = {
       Common: 0,
       Rare: 20,
       Epic: 40,
-      Legendary: 30,
-      Mythisch: 10
+      Legendary: 29.8,
+      Mythisch: 10,
+      Aetherisch: 0.2
     }
   }
 };
