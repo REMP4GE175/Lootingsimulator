@@ -1,8 +1,5 @@
 {
   "projects": {
-    "default": "looting-simulator",
-    "Game": "looting-simulator"
-  },
-  "targets": {},
-  "etags": {}
+    "default": "looting-simulator-90463"
+  }
 }

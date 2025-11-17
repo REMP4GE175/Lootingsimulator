@@ -1,18 +1,7 @@
-# OS / IDE
-Thumbs.db
-.DS_Store
-.vscode/
+# Build Output
+script.min.js
+script.min.js.map
 
-# Build artifacts
+# Dependencies
 node_modules/
-dist/
-
-# Firebase local cache
-.firebase/
-
-# Functions deps
-functions/node_modules/
-
-# Env files
-.env
-.env.*
+package-lock.json

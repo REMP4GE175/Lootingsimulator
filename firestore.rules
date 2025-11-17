@@ -1,44 +1,35 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Public readable leaderboard; users can only write safe fields on their own profile
-    match /users/{uid} {
-      allow read: if true;
-
-      // Allow initial create for the authenticated user
-      allow create: if request.auth != null && request.auth.uid == uid;
-
-      // Allow limited updates by the document owner only
-      allow update: if request.auth != null
-                    && request.auth.uid == uid
-                    // Only allow changes to these fields (other fields must remain unchanged)
-                    && request.resource.data.diff(resource.data).changedKeys().hasOnly([
-                      'displayName',
-                      'totalXP',
-                      'mythicsFound',
-                      'aethericsFound',
-                      'totalBoxesOpened',
-                      'createdAt',
-                      'lastSeenAt'
-                    ])
-                    // Ensure server-maintained prestige fields are not modified by the client
-                    && !request.resource.data.diff(resource.data).changedKeys().hasAny([
-                      'prestigeLevel',
-                      'lastPrestigeBoxesOpened',
-                      'lastPrestigeAt'
-                    ])
-                    // Basic type checks (allow any numeric type)
-                    && (("displayName" in request.resource.data) ? (request.resource.data.displayName is string) : true)
-                    && (("totalXP" in request.resource.data) ? (request.resource.data.totalXP is number) : true)
-                    && (("mythicsFound" in request.resource.data) ? (request.resource.data.mythicsFound is number) : true)
-                    && (("aethericsFound" in request.resource.data) ? (request.resource.data.aethericsFound is number) : true)
-                    && (("totalBoxesOpened" in request.resource.data) ? (request.resource.data.totalBoxesOpened is number) : true);
-
-      // Friends subcollection: user may manage their own friends list
-      match /friends/{friendUid} {
-        allow read: if request.auth != null && request.auth.uid == uid;
-        allow write: if request.auth != null && request.auth.uid == uid;
-      }
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // User documents
+    match /users/{userId} {
+      // Allow read for all authenticated users (for leaderboard)
+      allow read: if isSignedIn();
+      
+      // Only Cloud Functions can write user data
+      allow create, update, delete: if false;
+    }
+    
+    // Prestige collection (managed by Cloud Functions only)
+    match /prestige/{userId} {
+      allow read: if isSignedIn() && isOwner(userId);
+      allow write: if false; // Only Cloud Functions can write
+    }
+    
+    // Stats collection (for analytics - optional)
+    match /stats/{document=**} {
+      allow read: if false;
+      allow write: if false; // Only Cloud Functions/Admin
     }
   }
 }

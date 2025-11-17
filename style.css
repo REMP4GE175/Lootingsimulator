@@ -3,6 +3,64 @@ body {
   text-align: center;
   background-color: #1e1e1e;
   color: white;
+  margin: 0;
+  padding: 0;
+}
+
+/* Ad + Content Layout */
+#pageWrapper {
+  display: flex;
+  min-height: 100vh;
+  gap: 20px;
+  padding: 0;
+}
+
+.ad-column {
+  flex: 0 0 160px;
+  position: sticky;
+  top: 20px;
+  align-self: flex-start;
+  height: calc(100vh - 40px);
+  overflow: hidden;
+}
+
+.ad-left {
+  margin-left: 10px;
+}
+
+.ad-right {
+  margin-right: 10px;
+}
+
+#mainContent {
+  flex: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* Mobile: Hide ads on small screens */
+@media (max-width: 1024px) {
+  .ad-column {
+    display: none;
+  }
+  
+  #pageWrapper {
+    display: block;
+  }
+  
+  #mainContent {
+    max-width: 100%;
+    padding: 0 10px;
+  }
+}
+
+h1 {
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 /* Firebase status pill */
@@ -28,10 +86,9 @@ body {
 
 /* Kleine Inline-Versionsanzeige im Titel */
 .app-version-inline {
-  font-size: 0.45em;
+  font-size: 0.25em;
   color: #bdbdbd;
   font-weight: normal;
-  margin-left: 0.5rem;
   line-height: 1;
   vertical-align: baseline;
 }
@@ -67,6 +124,12 @@ body {
 #lootContainer {
   /* Loot-Grid bleibt zentriert */
   flex-shrink: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#lootContainer.box-switching {
+  opacity: 0;
+  transform: scale(0.95);
 }
 
 #openBtn {
@@ -148,10 +211,18 @@ body {
 #leftActions { grid-column: 1; justify-self: end; display: inline-flex; align-items: center; gap: 8px; }
 #shopBtn { /* Falls kein Wrapper existiert (vor Quickslots), weiterhin links platzieren */ grid-column: 1; justify-self: end; }
 
-/* Mitte: Öffnen-Button */
-#openBtn {
+/* Mitte: Öffnen-Button Wrapper */
+#openBtnWrapper {
   grid-column: 2;
   justify-self: center;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+#openBtn {
+  flex: 1;
+  min-width: 0; /* Erlaubt Schrumpfen */
 }
 
 /* Rechte Seite: Schlüssel-Button */
@@ -230,6 +301,12 @@ body {
   padding: 2px 6px;
   min-width: 18px;
   text-align: center;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.quickslot-badge.flash-red {
+  background: #e74c3c;
+  border-color: #8b2e24;
 }
 
 /* Trank-Icon (SVG-basiert, skalierbar) */
@@ -307,6 +384,7 @@ body {
   align-items: center;
   justify-content: center;
   z-index: 2050; /* Basisebene für Slots - sollte über dem Overlay liegen */
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .item {
@@ -503,9 +581,8 @@ body {
   border-radius: 15px;
 }
 
-#closeStatsBtn,
-#closeAchievementsBtn {
-  position: absolute;
+#closeStatsBtn {
+  position: sticky;
   top: 10px;
   right: 20px;
   z-index: 1100;
@@ -517,10 +594,11 @@ body {
   cursor: pointer;
   border-radius: 4px;
   transition: background-color 0.2s ease;
+  float: right;
+  margin-bottom: 10px;
 }
 
-#closeStatsBtn:hover,
-#closeAchievementsBtn:hover {
+#closeStatsBtn:hover {
   background-color: #666;
 }
 
@@ -753,7 +831,7 @@ body {
 }
 
 #closeCollectionBtn {
-  position: absolute;
+  position: sticky;
   top: 10px;
   right: 20px;
   z-index: 1100;
@@ -765,6 +843,8 @@ body {
   cursor: pointer;
   border-radius: 4px;
   transition: background-color 0.2s ease;
+  float: right;
+  margin-bottom: 10px;
 }
 
 #closeCollectionBtn:hover {
@@ -1377,6 +1457,51 @@ body {
   0%, 100% { box-shadow: 0 0 10px rgba(241,196,15,0.45), 0 0 20px rgba(241,196,15,0.25); }
   50% { box-shadow: 0 0 22px rgba(241,196,15,0.95), 0 0 34px rgba(243,156,18,0.65); }
 }
+
+/* Auto-Clicker Toggle Button */
+#autoClickerToggle {
+  padding: 15px 16px;
+  font-size: 18px;
+  border: 3px solid #9f7aea;
+  border-radius: 0 12px 12px 0;
+  border-left: none;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: bold;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4),
+              inset 0 -3px 10px rgba(0,0,0,0.2);
+  min-width: 65px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+#autoClickerToggle::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+#autoClickerToggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6),
+              inset 0 -3px 10px rgba(0,0,0,0.2);
+}
+
+#autoClickerToggle #autoClickerStatus {
+  display: block;
+  font-size: 10px;
+  margin-top: 2px;
+  opacity: 0.9;
+}
+
+
 .prestige-badge {
   background: rgba(255,255,255,0.08);
   border: 1px solid rgba(255,255,255,0.15);
@@ -1648,6 +1773,56 @@ body {
 }
 
 @keyframes moneyRise {
+  0% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-100px);
+  }
+}
+
+/* XP Gained Effect (blau) */
+.xp-gained-effect {
+  position: fixed;
+  font-size: 28px;
+  font-weight: bold;
+  color: #3498db;
+  pointer-events: none;
+  z-index: 9999;
+  text-shadow: 0 0 10px rgba(52, 152, 219, 0.8),
+               0 0 20px rgba(52, 152, 219, 0.6);
+  animation: xpRise 2s ease-out forwards;
+  transform: translateX(-50%);
+}
+
+@keyframes xpRise {
+  0% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-100px);
+  }
+}
+
+/* Potion Use Effect (rot) */
+.potion-use-effect {
+  position: fixed;
+  font-size: 20px;
+  font-weight: bold;
+  color: #e74c3c;
+  pointer-events: none;
+  z-index: 9999;
+  text-shadow: 0 0 10px rgba(231, 76, 60, 0.8),
+               0 0 20px rgba(231, 76, 60, 0.6);
+  animation: potionRise 2s ease-out forwards;
+  transform: translateX(-50%);
+}
+
+@keyframes potionRise {
   0% {
     opacity: 1;
     transform: translateX(-50%) translateY(0);

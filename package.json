@@ -1,0 +1,14 @@
+{
+  "name": "lootingsimulator",
+  "version": "0.64.0",
+  "description": "Lootcontainer-Simulator",
+  "private": true,
+  "scripts": {
+    "build": "node build.js",
+    "build:prod": "node build.js --production"
+  },
+  "devDependencies": {
+    "javascript-obfuscator": "^4.1.0",
+    "terser": "^5.26.0"
+  }
+}

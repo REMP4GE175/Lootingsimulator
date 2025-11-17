@@ -1,95 +1,435 @@
-// Pin to 1st Gen to avoid accidental 2nd Gen migration during upgrade
-const functions = require('firebase-functions/v1');
+const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+admin.initializeApp();
 
-try { admin.initializeApp(); } catch (_) {}
 const db = admin.firestore();
 
-// Helper: sanitize display name server-side
-function sanitizeName(name) {
-  if (typeof name !== 'string') return 'Anon';
-  let v = name.trim();
-  // Allow unicode letters/numbers/space/_/-; fallback ASCII if ICU not present
-  try { v = v.replace(/[^\p{L}\p{N} _-]/gu, ''); } catch (_) { v = v.replace(/[^A-Za-z0-9 _-]/g, ''); }
-  if (v.length < 3) v = v.padEnd(3, '_');
-  if (v.length > 24) v = v.slice(0, 24);
-  return v;
+// Schimpfwortfilter - Blockiere unangemessene Namen
+const PROFANITY_LIST = [
+  'arsch', 'scheisse', 'scheiße', 'fick', 'fotze', 'hurensohn', 'wichser', 'penner',
+  'bastard', 'hure', 'piss', 'kacke', 'schlampe', 'hitler', 'nazi', 'nigger', 'nigg',
+  'fuck', 'shit', 'bitch', 'asshole', 'cunt', 'dick', 'pussy', 'cock', 'whore',
+  'slut', 'fag', 'faggot', 'retard', 'rape', 'porn', 'sex', 'xxx', 'anal',
+  'admin', 'moderator', 'system', 'official', 'staff', 'support'
+];
+
+function containsProfanity(text) {
+  if (!text) return false;
+  const normalized = text.toLowerCase()
+    .replace(/[^a-zäöüß0-9]/g, '') // Entferne Sonderzeichen
+    .replace(/0/g, 'o')
+    .replace(/1/g, 'i')
+    .replace(/3/g, 'e')
+    .replace(/4/g, 'a')
+    .replace(/5/g, 's')
+    .replace(/7/g, 't')
+    .replace(/8/g, 'b');
+  
+  return PROFANITY_LIST.some(word => normalized.includes(word));
 }
 
-exports.setDisplayName = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'Auth required');
+/**
+ * Sync complete user data - NO APP CHECK
+ */
+exports.syncUserData = functions.https.onRequest(async (req, res) => {
+  // CORS Headers zuerst setzen
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
   }
-  const uid = context.auth.uid;
-  const raw = (data && data.displayName) || '';
-  const displayName = sanitizeName(String(raw));
-  const ref = db.collection('users').doc(uid);
-  await ref.set({ displayName, lastSeenAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-  return { ok: true, displayName };
+
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'User must be authenticated' });
+      return;
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    const userId = decodedToken.uid;
+
+    const data = req.body.data;
+
+    if (!data || typeof data !== 'object') {
+      res.status(400).json({ error: 'Invalid data' });
+      return;
+    }
+
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+
+    // Anti-cheat
+    if (userDoc.exists) {
+      const current = userDoc.data();
+      const isReset = (data.balance === 500 && data.playerLevel === 0 && data.totalXPEarned === 0);
+      
+      if (!isReset) {
+        if (data.totalXPEarned < (current.totalXPEarned || 0)) {
+          res.status(403).json({ error: 'Total XP cannot decrease' });
+          return;
+        }
+        if (data.totalBoxesOpened < (current.totalBoxesOpened || 0)) {
+          res.status(403).json({ error: 'Boxes opened cannot decrease' });
+          return;
+        }
+      }
+    }
+
+    const userData = {
+      displayName: data.displayName || 'Anonym',
+      totalXP: data.totalXPEarned || 0,
+      totalBoxesOpened: data.totalBoxesOpened || 0,
+      mythicsFound: data.mythicsFound || 0,
+      aethericsFound: data.aethericsFound || 0,
+      balance: data.balance || 0,
+      playerLevel: data.playerLevel || 0,
+      playerXP: data.playerXP || 0,
+      totalXPEarned: data.totalXPEarned || 0,
+      skillPoints: data.skillPoints || 0,
+      skills: data.skills || { wohlstand: 0, glueck: 0, effizienz: 0 },
+      prestigeLevel: data.prestigeLevel || 0,
+      runBoxesOpened: data.runBoxesOpened || 0,
+      activeBoosts: data.activeBoosts || {},
+      permanentUpgrades: data.permanentUpgrades || {},
+      purchasedItems: data.purchasedItems || [],
+      statUpgradesLevels: data.statUpgradesLevels || { wealth: 0, luck: 0, tempo: 0 },
+      keysInventory: data.keysInventory || { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 },
+      boxType: data.boxType || 'Box#1',
+      unlockedBoxes: data.unlockedBoxes || ['Box#1'],
+      stats: data.stats || {},
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await userRef.set(userData, { merge: true });
+    res.json({ result: { success: true } });
+  } catch (error) {
+    console.error('Error in syncUserData:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-exports.submitPrestige = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'Auth required');
+exports.getUserData = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'POST');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.status(204).send('');
+    return;
   }
-  const uid = context.auth.uid;
-  const ref = db.collection('users').doc(uid);
-  const now = admin.firestore.Timestamp.now();
-  const minGapSeconds = 10; // basic throttle to mitigate spamming
 
-  const MIN_RUN_BOXES = 200;
-
-  const res = await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    const doc = snap.exists ? snap.data() : {};
-  const currentLevel = Number(doc.prestigeLevel || 0);
-    const lastPrestigeAt = doc.lastPrestigeAt instanceof admin.firestore.Timestamp ? doc.lastPrestigeAt : null;
-  const mythicsFound = Number(doc.mythicsFound || 0);
-  const aethericsFound = Number(doc.aethericsFound || 0);
-    const totalBoxesOpened = Number(doc.totalBoxesOpened || 0);
-    const lastPrestigeBoxesOpened = Number(doc.lastPrestigeBoxesOpened || 0);
-
-    if (lastPrestigeAt) {
-      const diff = now.seconds - lastPrestigeAt.seconds;
-      if (diff < minGapSeconds) {
-        throw new functions.https.HttpsError('resource-exhausted', 'Too many prestige requests');
-      }
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'User must be authenticated' });
+      return;
     }
 
-    // Basic eligibility checks based on server-known aggregates
-    const runBoxes = Math.max(0, totalBoxesOpened - lastPrestigeBoxesOpened);
-    // Dynamic rarity requirement by prestige tier
-    // <10: 5 Mythics; <20: 1 Aetheric; <30: 2 Aetheric; >30: 3 Aetheric
-    if (currentLevel < 10) {
-      if (mythicsFound < 5) {
-        throw new functions.https.HttpsError('failed-precondition', 'Not enough mythics for prestige');
-      }
-    } else if (currentLevel < 20) {
-      if (aethericsFound < 1) {
-        throw new functions.https.HttpsError('failed-precondition', 'Not enough aetherics for prestige');
-      }
-    } else if (currentLevel < 30) {
-      if (aethericsFound < 2) {
-        throw new functions.https.HttpsError('failed-precondition', 'Not enough aetherics for prestige');
-      }
-    } else { // > 30
-      if (aethericsFound < 3) {
-        throw new functions.https.HttpsError('failed-precondition', 'Not enough aetherics for prestige');
-      }
-    }
-    if (runBoxes < MIN_RUN_BOXES) {
-      throw new functions.https.HttpsError('failed-precondition', 'Not enough boxes opened this run');
+    const token = authHeader.split('Bearer ')[1];
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    const userId = decodedToken.uid;
+
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      res.json({ result: null });
+      return;
     }
 
-    const nextLevel = currentLevel + 1;
-    tx.set(ref, {
-      prestigeLevel: nextLevel,
-      lastPrestigeAt: now,
-      lastSeenAt: now,
-      lastPrestigeBoxesOpened: totalBoxesOpened,
+    res.json({ result: userDoc.data() });
+  } catch (error) {
+    console.error('Error in getUserData:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+exports.resetUserData = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'POST');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.status(204).send('');
+    return;
+  }
+
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'User must be authenticated' });
+      return;
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    const userId = decodedToken.uid;
+
+    const { displayName } = req.body.data || {};
+    const userRef = db.collection('users').doc(userId);
+    
+    const resetData = {
+      displayName: displayName || 'Anonym',
+      totalXP: 0,
+      totalBoxesOpened: 0,
+      mythicsFound: 0,
+      aethericsFound: 0,
+      balance: 500,
+      playerLevel: 0,
+      playerXP: 0,
+      totalXPEarned: 0,
+      skillPoints: 0,
+      skills: { wohlstand: 0, glueck: 0, effizienz: 0 },
+      prestigeLevel: 0,
+      runBoxesOpened: 0,
+      activeBoosts: {},
+      permanentUpgrades: {},
+      purchasedItems: [],
+      statUpgradesLevels: { wealth: 0, luck: 0, tempo: 0 },
+      keysInventory: { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 },
+      boxType: 'Box#1',
+      unlockedBoxes: ['Box#1'],
+      stats: {},
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await userRef.set(resetData);
+    res.json({ result: { success: true } });
+  } catch (error) {
+    console.error('Error in resetUserData:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+exports.updateStats = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'POST');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.status(204).send('');
+    return;
+  }
+
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'User must be authenticated' });
+      return;
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    const userId = decodedToken.uid;
+
+    const stats = req.body.data;
+    if (!stats || typeof stats !== 'object') {
+      res.status(400).json({ error: 'Invalid stats data' });
+      return;
+    }
+
+    const userRef = db.collection('users').doc(userId);
+    await userRef.set({
+      ...stats,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
-    return { prestigeLevel: nextLevel };
-  });
 
-  return res;
+    res.json({ result: { success: true } });
+  } catch (error) {
+    console.error('Error in updateStats:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+exports.setDisplayName = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'POST');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.status(204).send('');
+    return;
+  }
+
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'User must be authenticated' });
+      return;
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    const userId = decodedToken.uid;
+
+    const { name } = req.body.data;
+    if (!name || typeof name !== 'string') {
+      res.status(400).json({ error: 'Invalid name' });
+      return;
+    }
+
+    // Längenprüfung
+    if (name.trim().length < 2 || name.length > 20) {
+      res.status(400).json({ error: 'Name must be 2-20 characters' });
+      return;
+    }
+
+    // Schimpfwortfilter
+    if (containsProfanity(name)) {
+      res.status(400).json({ error: 'Inappropriate name detected' });
+      return;
+    }
+
+    const userRef = db.collection('users').doc(userId);
+    await userRef.set({
+      displayName: name.trim(),
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    res.json({ result: { success: true } });
+  } catch (error) {
+    console.error('Error in setDisplayName:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+exports.prestige = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'POST');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.status(204).send('');
+    return;
+  }
+
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'User must be authenticated' });
+      return;
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    const userId = decodedToken.uid;
+
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      res.status(404).json({ error: 'User data not found' });
+      return;
+    }
+
+    const userData = userDoc.data();
+    const currentPrestige = userData.prestigeLevel || 0;
+    const { mythicsFound, aethericsFound, runBoxesOpened } = userData;
+    
+    let requiredMythics = 0;
+    let requiredAetherics = 0;
+    
+    if (currentPrestige < 10) {
+      requiredMythics = 5;
+    } else if (currentPrestige < 20) {
+      requiredAetherics = 1;
+    } else if (currentPrestige < 30) {
+      requiredAetherics = 2;
+    } else {
+      requiredAetherics = 3;
+    }
+    
+    const requiredBoxes = 200;
+
+    if (currentPrestige < 10 && (mythicsFound || 0) < requiredMythics) {
+      res.status(403).json({ error: `Need ${requiredMythics} Mythic items` });
+      return;
+    }
+
+    if (currentPrestige >= 10 && (aethericsFound || 0) < requiredAetherics) {
+      res.status(403).json({ error: `Need ${requiredAetherics} Aetherisch items` });
+      return;
+    }
+
+    if ((runBoxesOpened || 0) < requiredBoxes) {
+      res.status(403).json({ error: `Need ${requiredBoxes} boxes opened this run` });
+      return;
+    }
+
+    const newPrestigeLevel = currentPrestige + 1;
+
+    await userRef.update({
+      prestigeLevel: newPrestigeLevel,
+      prestigeTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+      runBoxesOpened: 0,
+    });
+
+    res.json({ 
+      result: {
+        success: true, 
+        newLevel: newPrestigeLevel,
+        bonuses: {
+          valueBoost: newPrestigeLevel * 5,
+          luckBoost: newPrestigeLevel,
+          timeReduction: newPrestigeLevel * 2,
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error in prestige:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+exports.getLeaderboard = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'POST');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.status(204).send('');
+    return;
+  }
+
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'User must be authenticated' });
+      return;
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    await admin.auth().verifyIdToken(token);
+
+    const limit = req.body.data?.limit || 50;
+
+    const snapshot = await db.collection('users')
+      .orderBy('prestigeLevel', 'desc')
+      .orderBy('totalXP', 'desc')
+      .limit(Math.min(limit, 100))
+      .get();
+
+    const leaderboard = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      const displayName = data.displayName || 'Anonym';
+      
+      // Nur Benutzer mit gesetztem Namen anzeigen (nicht "Anonym")
+      if (displayName !== 'Anonym') {
+        leaderboard.push({
+          uid: doc.id,
+          displayName: displayName,
+          totalXP: data.totalXP || 0,
+          totalBoxesOpened: data.totalBoxesOpened || 0,
+          prestigeLevel: data.prestigeLevel || 0,
+          mythicsFound: data.mythicsFound || 0,
+          aethericsFound: data.aethericsFound || 0
+        });
+      }
+    });
+
+    res.json({ result: leaderboard });
+  } catch (error) {
+    console.error('Error in getLeaderboard:', error);
+    res.status(500).json({ error: error.message });
+  }
 });

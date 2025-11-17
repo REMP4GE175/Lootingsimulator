@@ -1,4 +1,7 @@
 // ======= Zustandsvariablen =======
+// App Version (für Update-Check)
+const APP_VERSION = '0.65';
+
 // Items, die der Spieler bereits entdeckt hat
 const discoveredItems = new Set();
 // Items, die in der letzten Öffnung gezogen wurden (für Hervorhebung in Sammlung)
@@ -51,8 +54,13 @@ function getItemImagePath(iconFileName, rarity) {
   // Erlaube absolute/komplette Pfade (z. B. für Schlüssel-Icons aus Common-Ordner)
   if (typeof iconFileName === 'string') {
     const s = iconFileName;
-    if (s.startsWith('Itembilder/') || s.startsWith('http') || s.startsWith('data:')) {
-      return s; // bereits vollständiger Pfad oder Data-URL
+    if (s.startsWith('http') || s.startsWith('data:')) {
+      return s; // HTTP-URLs oder Data-URLs unverändert
+    }
+    if (s.startsWith('Itembilder/')) {
+      // Vollständiger Pfad - Segmente einzeln encoden
+      const parts = s.split('/');
+      return parts.map((part, idx) => idx === 0 ? part : encodeURIComponent(part)).join('/');
     }
   }
   const folder = RARITY_FOLDER_MAP[rarity] || 'Common';
@@ -117,6 +125,7 @@ function getAlternateIconNames(iconFileName) {
 // ======= Level & Skill System =======
 let playerLevel = 0;
 let playerXP = 0;
+let totalXPEarned = 0; // Gesamte XP über alle Level hinweg
 let skillPoints = 0;
 
 // Prestige-System: globale, dauerhafte Meta-Progression
@@ -259,6 +268,30 @@ const shopItems = {
     cost: 30000,
     type: "perm",
     effect: { type: "permPotionBelt", value: 1 }
+  },
+  permAutoClicker: {
+    name: "Auto-Öffner",
+    description: "Öffnet automatisch Boxen alle 3 Sekunden (wenn genug Geld vorhanden)",
+    icon: "🤖",
+    cost: 100000,
+    type: "perm",
+    effect: { type: "permAutoClicker", value: 1 }
+  },
+  permAutoClickerSpeed1: {
+    name: "Auto-Öffner",
+    description: "Upgrade: Reduziert Wartezeit auf 2 Sekunden (benötigt Auto-Öffner)",
+    icon: "🤖⚡",
+    cost: 250000,
+    type: "perm",
+    effect: { type: "permAutoClickerSpeed1", value: 1 }
+  },
+  permAutoClickerSpeed2: {
+    name: "Auto-Öffner",
+    description: "Upgrade: Reduziert Wartezeit auf 1 Sekunde (benötigt vorheriges Upgrade)",
+    icon: "🤖⚡⚡",
+    cost: 500000,
+    type: "perm",
+    effect: { type: "permAutoClickerSpeed2", value: 1 }
   }
 };
 
@@ -319,8 +352,16 @@ let permanentUpgrades = {
   permTempoBoost: 0,
   permValueBoost: 0,
   permXPBoost: 0,
-  permPotionBelt: 0
+  permPotionBelt: 0,
+  permAutoClicker: 0,
+  permAutoClickerSpeed1: 0,
+  permAutoClickerSpeed2: 0
 };
+
+// Auto-Clicker Toggle State (unabhängig vom Upgrade)
+let autoClickerEnabled = false; // Default: AUS
+let autoClickerCanRun = false; // Erlaubt Auto-Clicks erst nach manuellem Öffnen
+let autoClickerSpeed = 3; // Default: 3 Sekunden (3s → 2s → 1s)
 
 // Gekaufte Items (für "Ausverkauft"-Status bei Einmal-Items)
 let purchasedItems = new Set();
@@ -368,63 +409,63 @@ function getCurrentTitle() {
 const itemPools = {
   Common: [
     // Schlüssel (Common) – sehr selten innerhalb der Common-Rarität
-    { name: "Schlüssel: Gewöhnlich", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen gewöhnlichen Raum mit Common-lastigen Loot.", isKey: true, dropWeight: 0.75 },
+  { name: "Schlüssel: Gewöhnlich", icon: "Itembilder/Common/common schlüssel.png", value: 0, description: "Öffnet einen gewöhnlichen Raum mit Common-lastigen Loot.", isKey: true, dropWeight: 0.75 },
     { name: "Rostige Münze", icon: "Itembilder/Common/rusty coin.png", value: 15, description: "Ein alter, wertloser Münzfund." },
-    { name: "Holzbrett", icon: "Itembilder/Common/Holzbrett.png", value: 20, description: "Nicht mal als Waffe zu gebrauchen." },
-    { name: "Taschentuch", icon: "Itembilder/Common/Taschentuch.png", value: 18, description: "Ein gebrauchtes Stück Stoff." },
+    { name: "Holzbrett", icon: "Itembilder/Common/Holzbrett.png", value: 20, description: "Nichts weiter als ein altes Holzbrett." },
+    { name: "Taschentuch", icon: "Itembilder/Common/Taschentuch.png", value: 18, description: "Eine fast leere Packung Taschentücher." },
     { name: "Streichhölzer", icon: "Itembilder/Common/Streichholz.png", value: 25, description: "Eine Schachtel alte Streichhölzer." },
     { name: "Kronkorken", icon: "Itembilder/Common/bottle cap.png", value: 22, description: "Ein Verschluss von einer Flasche." },
     { name: "Fischgräte", icon: "Itembilder/Common/Gräte.png", value: 30, description: "Überreste einer längst verzehrten Mahlzeit." },
     { name: "Eichel", icon: "Itembilder/Common/Eichel.png", value: 28, description: "Eine Frucht vom Eichenbaum." },
     { name: "Göffel", icon: "Itembilder/Common/Göffel.png", value: 35, description: "Eine Mischung aus Gabel und Löffel." },
-    { name: "Leere Karte", icon: "Itembilder/Common/LeereKarte.png", value: 32, description: "Ein unbeschriebenes Kartenblatt." },
-    { name: "Kaputte Brille", icon: "Itembilder/Common/kaputte Brille.png", value: 24, description: "Eine kaputte Brille ohne Gläser." },
+    { name: "Leere Karte", icon: "Itembilder/Common/LeereKarte.png", value: 32, description: "Ein Stück unbeschriebenes Pergament." },
+    { name: "Kaputte Brille", icon: "Itembilder/Common/kaputte Brille.png", value: 24, description: "Eine Brille die schonmal bessere Tage gesehen hat..." },
     { name: "Knopf", icon: "Itembilder/Common/Knopf.png", value: 16, description: "Ein einzelner Knopf von einem Hemd." },
     { name: "Korken", icon: "Itembilder/Common/Korken.png", value: 19, description: "Ein alter Flaschenkorken." },
     { name: "Seil", icon: "Itembilder/Common/Seil.png", value: 26, description: "Ein kurzes, ausgefranstes Seil." },
     { name: "Stofflappen", icon: "Itembilder/Common/Stofflappen.png", value: 17, description: "Ein schmutziger Lappen." },
-    { name: "Metallschrott", icon: "Itembilder/Common/Metallschrott.png", value: 29, description: "Ein rostiges Stück Metall." },
+    { name: "Metallschrott", icon: "Itembilder/Common/Metallschrott.png", value: 29, description: "Ein altes Stück Metall." },
     { name: "Alte Dose", icon: "Itembilder/Common/Dose.png", value: 21, description: "Eine zerbeulte, leere Dose." },
     { name: "Einzelne Socke", icon: "Itembilder/Common/Einzelner Socke.png", value: 20, description: "Wo ist der andere hin?" },
     { name: "Gummiband", icon: "Itembilder/Common/Gummiband.png", value: 18, description: "Ein ausgeleiertes Haargummi." },
-    { name: "Alter Schlüssel", icon: "Itembilder/Common/Schlüssel.png", value: 23, description: "Passt nirgendwo rein." },
-    { name: "Alte Eintrittskarte", icon: "Itembilder/Common/Kinoticket.png", value: 19, description: "Von einem vergessenen Event." },
+    { name: "Alter Schlüssel", icon: "Itembilder/Common/alter Schlüssel.png", value: 23, description: "Passt nirgendwo rein." },
+    { name: "Alte Eintrittskarte", icon: "Itembilder/Common/Kinoticket.png", value: 19, description: "Freier Eintritt! ...für ein längst vergangenes Event." },
     { name: "Briefumschlag", icon: "Itembilder/Common/Briefumschlag.png", value: 17, description: "Leer und vergilbt." },
-    { name: "Stempel", icon: "Itembilder/Common/Stempel.png", value: 27, description: "Ein alter Gummistempel." },
+    { name: "Stempel", icon: "Itembilder/Common/Stempel.png", value: 27, description: "Ein alter Bürostempel." },
     { name: "Schere", icon: "Itembilder/Common/Schere.png", value: 31, description: "Stumpf und verrostet." },
     { name: "Stift", icon: "Itembilder/Common/Stift.png", value: 20, description: "Schreibt nicht mehr." },
     { name: "Schraube", icon: "Itembilder/Common/Schraube.png", value: 22, description: "Eine einzelne Schraube." },
-    { name: "Mutter & Bolzen", icon: "Itembilder/Common/Muttern und Bolzen.png", value: 25, description: "Passt perfekt zusammen." },
-    { name: "Draht", icon: "Itembilder/Common/Draht.png", value: 24, description: "Ein verbogenes Stück Draht." },
+    { name: "Mutter & Bolzen", icon: "Itembilder/Common/Muttern und Bolzen.png", value: 25, description: "Alt und verrostet." },
+    { name: "Draht", icon: "Itembilder/Common/Draht.png", value: 24, description: "Ein Stück Draht." },
     { name: "Schraubendreher", icon: "Itembilder/Common/Schraubendreher.png", value: 28, description: "Für winzige Schrauben." },
     { name: "Leerer Milchkarton", icon: "Itembilder/Common/Milchkarton.png", value: 18, description: "Riecht leicht säuerlich." },
     { name: "Plastikflasche", icon: "Itembilder/Common/Plastikflasche.png", value: 19, description: "Eine leere Wasserflasche." },
     { name: "Zigarettenstummel", icon: "Itembilder/Common/Zigarettenstummel.png", value: 15, description: "Eklig und nutzlos." },
     { name: "Kaffeefilter", icon: "Itembilder/Common/Kaffeefilter.png", value: 17, description: "Gebraucht und fleckig." },
     { name: "Teebeutel", icon: "Itembilder/Common/Teebeutel.png", value: 16, description: "Längst durchgezogen." },
-    { name: "Wäscheklammer", icon: "Itembilder/Common/Wäscheklammer.png", value: 8, description: "Eine Handvoll aus Plastik." },
+    { name: "Wäscheklammer", icon: "Itembilder/Common/Wäscheklammer.png", value: 8, description: "Eine einzelne Wäscheklammer." },
     { name: "Plastiktüte", icon: "Itembilder/Common/Plastiktüte.png", value: 4, description: "Vom Supermarkt, mehrfach verwendet." },
-    { name: "Büroklammer", icon: "Itembilder/Common/Büroklammer.png", value: 6, description: "Eine verbogene Metallklammer." },
+    { name: "Büroklammer", icon: "Itembilder/Common/Büroklammer.png", value: 6, description: "Eine kleine aber feine Klammer." },
     { name: "Radiergummi", icon: "Itembilder/Common/Radiergummi.png", value: 9, description: "Hart und brüchig geworden." },
     { name: "Reißzwecke", icon: "Itembilder/Common/Reißzwecke.png", value: 6, description: "Immer noch spitz." },
-    { name: "Zahnstocher", icon: "Itembilder/Common/Zahnstocher.png", value: 3, description: "Eine Handvoll Holzstäbchen." },
+    { name: "Zahnstocher", icon: "Itembilder/Common/Zahnstocher.png", value: 3, description: "Ein Zahnstocher sie alle zu knechten." },
   ],
   Rare: [
     // Schlüssel (Rare) – seltener als Common-Schlüssel
-    { name: "Schlüssel: Selten", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen seltenen Raum mit Rare-lastigen Loot.", isKey: true, dropWeight: 0.6 },
+    { name: "Schlüssel: Selten", icon: "Itembilder/Selten/seltener Schlüssel.png", value: 0, description: "Öffnet einen seltenen Raum mit Rare-lastigen Loot.", isKey: true, dropWeight: 0.6 },
     { name: "Silber Ring", icon: "Itembilder/Selten/Silber Ring.png", value: 120, description: "Ein hübscher Ring mit leichtem Glanz." },
     { name: "Schatzkarte", icon: "Itembilder/Selten/Map.png", value: 250, description: "Zeigt vergessene Wege." },
     { name: "Schachtel Zigaretten", icon: "Itembilder/Selten/zigaretten.png", value: 180, description: "\"Mit dem Rauchen aufzuhören ist kinderleicht. Ich habe es schon hundert Mal gemacht.\"", quoteAuthor: "Mark Twain" },
-    { name: "Kartenspiel", icon: "Itembilder/Selten/Kartenspiel.png", value: 150, description: "Ein klassisches Deck mit aufwendigem Design." },
-    { name: "Vintage-Feuerzeug", icon: "Itembilder/Selten/Feuerzeug.png", value: 140, description: "Ein Zippo mit eingraviertem Datum." },
+    { name: "Kartenspiel", icon: "Itembilder/Selten/Kartenspiel.png", value: 150, description: "Ein klassisches Deck." },
+    { name: "Vintage-Feuerzeug", icon: "Itembilder/Selten/Feuerzeug.png", value: 140, description: "Ein altes Zippo." },
     { name: "Alte Armbanduhr", icon: "Itembilder/Selten/Armbanduhr.png", value: 200, description: "Mechanisch, läuft noch präzise." },
     { name: "Lederbrieftasche", icon: "Itembilder/Selten/Brieftasche.png", value: 130, description: "Hochwertig verarbeitet, leicht abgenutzt." },
     { name: "Schweizer Taschenmesser", icon: "Itembilder/Selten/Taschenmesser.png", value: 180, description: "Mit allen wichtigen Werkzeugen." },
     { name: "Briefmarken-Sammlung", icon: "Itembilder/Selten/Briefmarken.png", value: 220, description: "Seltene Exemplare aus den 1950ern." },
-    { name: "Silbermünzen", icon: "Itembilder/Selten/Silbermünze.png", value: 190, description: "Eine Handvoll alter Gedenkmünzen." },
+    { name: "Silbermünze", icon: "Itembilder/Selten/Silbermünze.png", value: 190, description: "\"Mein erster Groschen!.\"", quoteAuthor: "Eugene H. Krabs" },
     { name: "Digitalkamera", icon: "Itembilder/Selten/Kamera.png", value: 240, description: "Alte Profi-Kamera, funktioniert noch." },
-    { name: "Taschenlampe (LED)", icon: "Itembilder/Selten/Taschenlampe.png", value: 120, description: "Extrem hell, militärische Qualität." },
-    { name: "Multimeter", icon: "Itembilder/Selten/Multimeter.png", value: 150, description: "Für alle elektronischen Messungen." },
+    { name: "Taschenlampe (LED)", icon: "Itembilder/Selten/Taschenlampe.png", value: 120, description: "Extrem hell." },
+    { name: "Multimeter", icon: "Itembilder/Selten/Multimeter.png", value: 150, description: "Für allerlei elektronischen Messungen." },
     { name: "Taschenuhr", icon: "Itembilder/Selten/Taschenuhr.png", value: 260, description: "Goldüberzogen, mit Kette." },
     { name: "Silberkette", icon: "Itembilder/Selten/Silberkette.png", value: 180, description: "Fein gearbeitet, leicht angelaufen." },
     { name: "Netzteil", icon: "Itembilder/Selten/Netzteil.png", value: 170, description: "Universalnetzteil, liefert zuverlässig Strom." },
@@ -432,40 +473,39 @@ const itemPools = {
     { name: "Holz-Spielzeug", icon: "Itembilder/Selten/Holz-Spielzeug.png", value: 200, description: "Ein Andenken an einfachere Zeiten." },
     { name: "Postkarten-Sammlung", icon: "Itembilder/Selten/Postkarten.png", value: 140, description: "Aus aller Welt, teilweise frankiert." },
     { name: "Comic Heft", icon: "Itembilder/Selten/Comic.png", value: 190, description: "Erste Ausgabe, leicht vergilbt." },
-    { name: "USB-Stick", icon: "Itembilder/Selten/USB.png", value: 120, description: "8GB, mit alten Fotos." },
+    { name: "USB-Stick", icon: "Itembilder/Selten/USB.png", value: 120, description: "Ein 8GB Stick, was da wohl drauf ist?" },
     { name: "Kopfhörer", icon: "Itembilder/Selten/Kopfhörer.png", value: 150, description: "Over-Ear, noch funktionsfähig." },
     { name: "Wecker (Analog)", icon: "Itembilder/Selten/Wecker.png", value: 140, description: "Mit lautem Klingeln." },
-    { name: "Taschenrechner", icon: "Itembilder/Selten/Taschenrechner.png", value: 110, description: "Solar-betrieben, funktioniert noch." },
+    { name: "Taschenrechner", icon: "Itembilder/Selten/Taschenrechner.png", value: 110, description: "Besitzt nichtmal ein Pluszeichen..." },
     { name: "Zange", icon: "Itembilder/Selten/Zange.png", value: 180, description: "Kombinationszange in gutem Zustand." },
     { name: "Hammer", icon: "Itembilder/Selten/Hammer.png", value: 170, description: "Kleiner Schlosserhammer." },
     { name: "Maßband", icon: "Itembilder/Selten/Maßband.png", value: 130, description: "5 Meter, etwas ausgeleiert." },
-    { name: "Schraubenschlüssel", icon: "Itembilder/Selten/Schraubenschlüssel.png", value: 160, description: "Verstellbar, leicht rostig." },
-    { name: "Sonnenbrille", icon: "Itembilder/Selten/Sonnenbrille.png", value: 150, description: "Designer-Imitat, cooles Modell." },
+    { name: "Schraubenschlüssel", icon: "Itembilder/Selten/Schraubenschlüssel.png", value: 160, description: "Leicht rostig." },
+    { name: "Sonnenbrille", icon: "Itembilder/Selten/Sonnenbrille.png", value: 150, description: "UV-Strahlen hassen diesen Trick..." },
     { name: "Geldbeutel", icon: "Itembilder/Selten/Geldbeutel.png", value: 190, description: "Leder, mit initialen Prägung." }
   ],
   Epic: [
     // Schlüssel (Epic)
-    { name: "Schlüssel: Episch", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen epischen Raum mit Epic-lastigen Loot.", isKey: true, dropWeight: 0.45 },
+    { name: "Schlüssel: Episch", icon: "Itembilder/Episch/epischer Schlüssel.png", value: 0, description: "Öffnet einen epischen Raum mit Epic-lastigen Loot.", isKey: true, dropWeight: 0.45 },
     { name: "Verzauberte Schriftrolle", icon: "Itembilder/Episch/Scroll.png", value: 600, description: "Ein Zauber, der nur einmal wirkt." },
     { name: "Phönixfeder", icon: "Itembilder/Episch/Phoenix Feder.png", value: 1200, description: "Glüht leicht in deiner Hand." },
-    { name: "Vinyl-Schallplatte", icon: "Itembilder/Episch/Vinyl.png", value: 800, description: "Ein Medium aus vergangenen Tagen." },
     { name: "Perlenkette", icon: "Itembilder/Episch/Perlenkette.png", value: 950, description: "Echte Süßwasserperlen." },
     { name: "Bernsteinanhänger", icon: "Itembilder/Episch/Bernstein.png", value: 1100, description: "Mit eingeschlossenem Insekt." },
-    { name: "Antike Schreibfeder", icon: "Itembilder/Episch/Schreibfeder.png", value: 750, description: "Mit echtem Tintenfass." },
+    { name: "Antike Schreibfeder", icon: "Itembilder/Episch/Schreibfeder.png", value: 750, description: "liegt schwungvoll in der Hand." },
     { name: "Goldkette", icon: "Itembilder/Episch/Goldkette.png", value: 1000, description: "Schwere 18-Karat-Goldkette." },
     { name: "Diamantring", icon: "Itembilder/Episch/Diamantring.png", value: 1400, description: "Kleiner, aber echter Diamant." },
     { name: "Smaragd-Ohrringe", icon: "Itembilder/Episch/Smaragd-Ohrringe.png", value: 1150, description: "Facettierte grüne Edelsteine." },
     { name: "Rubinanhänger", icon: "Itembilder/Episch/Rubinanhänger.png", value: 1300, description: "Tiefrotes Juwel in Goldfassung." },
     { name: "Sextant", icon: "Itembilder/Episch/Sextant.png", value: 900, description: "Navigationsgerät aus Messing." },
-    { name: "Taschenuhr (Antik)", icon: "Itembilder/Episch/Taschenuhr_antik.png", value: 1100, description: "Mit aufwendiger Gravur, funktioniert noch." },
+    { name: "Antike Taschenuhr", icon: "Itembilder/Episch/Taschenuhr_antik.png", value: 1100, description: "Mit aufwendiger Gravur, funktioniert noch." },
     { name: "Porzellanfigur", icon: "Itembilder/Episch/Porzellanfigur.png", value: 850, description: "Meißener Porzellan, feiner Riss." },
     { name: "Alte Bibel", icon: "Itembilder/Episch/Bibel.png", value: 950, description: "Ledereinband, handgeschrieben, aus dem 19. Jahrhundert." },
-    { name: "Signiertes Buch", icon: "Itembilder/Episch/signiertes_buch.png", value: 800, description: "Erstausgabe mit Autogramm." },
+    { name: "Signierte Schallplatte", icon: "Itembilder/Episch/signierte Schallplatte.png", value: 800, description: "Erstausgabe mit Autogramm." },
     { name: "Vintage-Kamera", icon: "Itembilder/Episch/vintage_kamera.png", value: 1050, description: "Leica aus den 60ern, funktionsfähig." },
-    { name: "Röhrenradio", icon: "Itembilder/Episch/roehrenradio.png", value: 900, description: "Retro-Radio aus Holz, spielt noch." },
+    { name: "Röhrenradio", icon: "Itembilder/Episch/röhrenradio.png", value: 900, description: "Retro-Radio aus Holz, spielt noch." },
     { name: "Schreibmaschine", icon: "Itembilder/Episch/schreibmaschine.png", value: 850, description: "Mechanische Underwood, alle Tasten funktionieren." },
     { name: "Ölgemälde", icon: "Itembilder/Episch/oelgemaelde.png", value: 1200, description: "Signiertes Landschaftsbild, Rahmen vergoldet." },
-    { name: "Bronze-Statue", icon: "Itembilder/Episch/bronze_statue.png", value: 1100, description: "Kleine Figur, schwer und detailreich." },
+    { name: "Marmor-Statue", icon: "Itembilder/Episch/marmorstatue.png", value: 1100, description: "Kleine Figur, schwer und detailreich." },
     { name: "Kristall-Vase", icon: "Itembilder/Episch/kristall_vase.png", value: 900, description: "Handgeschliffen, böhmisches Glas." },
     { name: "Dolch (Antik)", icon: "Itembilder/Episch/dolch.png", value: 1000, description: "Zeremoniendolch mit Verzierungen." },
     { name: "Militärkompass", icon: "Itembilder/Episch/militaerkompass.png", value: 700, description: "Aus dem 2. Weltkrieg, funktioniert noch." },
@@ -475,26 +515,22 @@ const itemPools = {
   ],
   Legendary: [
     // Schlüssel (Legendary) – sehr selten
-    { name: "Schlüssel: Legendär", icon: "Itembilder/Common/Schlüssel.png", value: 0, description: "Öffnet einen legendären Raum mit Legendary-lastigen Loot.", isKey: true, dropWeight: 0.3 },
-    { name: "Drachenschuppe", icon: "Itembilder/Legendär/dragon_scale.png", value: 6000, description: "Unzerstörbar und selten." },
-    { name: "Himmelsorb", icon: "Itembilder/Legendär/orb.png", value: 12000, description: "Ein Relikt aus einer anderen Welt." },
-    { name: "Goldblock", icon: "Itembilder/Legendär/goldblock.png", value: 8000, description: "Ein massiver Block aus reinem Gold." },
-    { name: "Golduhr", icon: "Itembilder/Legendär/golduhr.png", value: 9500, description: "Eine prächtige Uhr aus Gold und Diamanten." },
-    { name: "Kronjuwel", icon: "Itembilder/Legendär/kronjuwel.png", value: 11500, description: "Ein seltener Edelstein aus königlichem Besitz." },
-    { name: "Platinbarren", icon: "Itembilder/Legendär/platinbarren.png", value: 11000, description: "Schwer, selten und äußerst wertvoll." },
-    { name: "Saphir-Diadem", icon: "Itembilder/Legendär/saphir_diadem.png", value: 10500, description: "Mit tiefblauen Saphiren besetzt." },
-    { name: "Meteoritenfragment", icon: "Itembilder/Legendär/meteorit.png", value: 9000, description: "Ein Stück aus dem All, magnetisch." },
-    { name: "Ritterrüstung (Antik)", icon: "Itembilder/Legendär/ritterruestung.png", value: 10000, description: "Vollplatte, musealer Zustand." },
-    { name: "Meisterwerk-Gemälde", icon: "Itembilder/Legendär/meisterwerk.png", value: 12000, description: "Ein signiertes Original eines Meisters." },
-    { name: "Schwarze Perle", icon: "Itembilder/Legendär/schwarze_perle.png", value: 9800, description: "Seltene Perle mit tiefschwarzem Glanz." },
-    { name: "Kristallschädel", icon: "Itembilder/Legendär/kristallschaedel.png", value: 10400, description: "Mysteriöses Artefakt aus Kristall." },
-    { name: "Königszepter", icon: "Itembilder/Legendär/koenigszepter.png", value: 11200, description: "Symbol königlicher Macht, reich verziert." },
-    { name: "Reliquienschrein", icon: "Itembilder/Legendär/reliquienschrein.png", value: 9200, description: "Vergoldeter Schrein mit heiliger Reliquie." },
-    { name: "Runenstein", icon: "Itembilder/Legendär/runenstein.png", value: 8600, description: "Antiker Stein mit leuchtenden Runen." }
+  { name: "Schlüssel: Legendär", icon: "Itembilder/Legendär/legendärer Schlüssel.png", value: 0, description: "Öffnet einen legendären Raum mit Legendary-lastigen Loot.", isKey: true, dropWeight: 0.3 },
+    { name: "Drachenschuppe", icon: "Itembilder/Legendär/Drachenschuppe.png", value: 6000, description: "Unzerstörbar und selten." },
+    { name: "Goldblock", icon: "Itembilder/Legendär/Goldblock.png", value: 8000, description: "Ein massiver Block aus reinem Gold." },
+    { name: "Golduhr", icon: "Itembilder/Legendär/Golduhr.png", value: 9500, description: "Eine prächtige Uhr aus Gold und Diamanten." },
+    { name: "Kronjuwel", icon: "Itembilder/Legendär/Kronjuwel.png", value: 11500, description: "Ein seltener Edelstein aus königlichem Besitz." },
+    { name: "Platinbarren", icon: "Itembilder/Legendär/Platinbarren.png", value: 11000, description: "Schwer, selten und äußerst wertvoll." },
+    { name: "Ritterrüstung (Antik)", icon: "Itembilder/Legendär/Ritterrüstung.png", value: 10000, description: "Vollplatte, musealer Zustand." },
+    { name: "Meisterwerk-Gemälde", icon: "Itembilder/Legendär/Meisterwerk.png", value: 12000, description: "Ein signiertes Original eines Meisters." },
+    { name: "Schwarze Perle", icon: "Itembilder/Legendär/Schwarze Perle.png", value: 9800, description: "Seltene Perle mit tiefschwarzem Glanz." },
+    { name: "Kristallschädel", icon: "Itembilder/Legendär/Kristallschädel.png", value: 10400, description: "Mysteriöses Artefakt aus Kristall." },
+    { name: "Königszepter", icon: "Itembilder/Legendär/Königszepter.png", value: 11200, description: "Symbol königlicher Macht, reich verziert." },
+    { name: "Runenstein", icon: "Itembilder/Legendär/Runenstein.png", value: 8600, description: "Antiker Stein mit leuchtenden Runen." }
   ],
   Mythisch: [
     // Schlüssel (Mythisch) – extrem selten
-    { name: "Schlüssel: Mythisch", icon: "Itembilder/Mythisch/Schlüssel Mythisch.png", value: 0, description: "Öffnet einen mythischen Raum mit hochwertigem Loot.", isKey: true, dropWeight: 0.15 },
+  { name: "Schlüssel: Mythisch", icon: "Itembilder/Mythisch/Schlüssel Mythisch.png", value: 0, description: "Öffnet einen mythischen Raum mit hochwertigem Loot.", isKey: true, dropWeight: 0.15 },
     { name: "Mystische Klinge", icon: "Itembilder/Mythisch/mystic_blade.png", value: 80000, description: "Eine legendäre Klinge mit uralter Macht." },
     { name: "Zeitkristall", icon: "Itembilder/Mythisch/time_crystal.png", value: 250000, description: "Manipuliert die Zeit für einen Moment." },
     { name: "Geheime Dokumente", icon: "Itembilder/Mythisch/geheime_dokumente.png", value: 150000, description: "Streng geheime Regierungsunterlagen." },
@@ -502,15 +538,15 @@ const itemPools = {
     { name: "Singularitätskern", icon: "Itembilder/Mythisch/singularitaetskern.png", value: 240000, description: "Komprimierte Raumzeit in einer Kapsel." },
     { name: "Ewige Flamme", icon: "Itembilder/Mythisch/ewige_flamme.png", value: 120000, description: "Brennt ohne jede Quelle weiter." },
     { name: "Ätherisches Grimoire", icon: "Itembilder/Mythisch/aetherisches_grimoire.png", value: 175000, description: "Die Seiten ändern sich bei jedem Öffnen." },
-    { name: "Weltensextant", icon: "Itembilder/Mythisch/weltensextant.png", value: 160000, description: "Findet Wege zwischen Dimensionen." },
+    { name: "Königsrüstung", icon: "Itembilder/Mythisch/Königsrüstung.png", value: 160000, description: "Findet Wege zwischen Dimensionen." },
     { name: "Schattenmantel", icon: "Itembilder/Mythisch/schattenmantel.png", value: 90000, description: "Lässt dich im Dunkel verschwinden." },
     { name: "Zeitreisekompass", icon: "Itembilder/Mythisch/zeitkompass.png", value: 140000, description: "Zeigt nicht Norden, sondern Morgen." }
   ]
   ,
   Aetherisch: [
-    { name: "Katze im Karton", icon: "Itembilder/Episch/Floki.png", value: 500000, description: "Eine niedliche Katze, die es sich in einem Karton bequem gemacht hat." },
-    { name: "Katze in Katzenhöhle", icon: "Itembilder/Episch/Biene.png", value: 500000, description: "Eine zufriedene Katze, die in ihrer Höhle döst." },
-    { name: "Katze auf türkisem Stuhl", icon: "Itembilder/Episch/Simba.png", value: 500000, description: "Eine elegante Katze thront auf einem stilvollen türkisen Stuhl." }
+    { name: "Floki", icon: "Itembilder/Aetherisch/Floki.jpg", value: 500000, description: "Floki, Schlächter von Dreamies und besetzer der Kartons." },
+    { name: "Biene", icon: "Itembilder/Aetherisch/Biene.jpg", value: 500000, description: "Biene, Träger des Fluffs und besetzerin von Höhlen." },
+    { name: "Simba", icon: "Itembilder/Aetherisch/Simba.jpg", value: 500000, description: "Simba, König des Türkisen Stuhls." }
   ]
 };
 
@@ -545,9 +581,9 @@ const boxConfigs = {
     weights: {
       Common: 10.0,
       Rare: 21.0,
-      Epic: 50.0,
-      Legendary: 18.0,
-      Mythisch: 1.0,
+      Epic: 59.5,
+      Legendary: 9.0,
+      Mythisch: 0.5,
       Aetherisch: 0.0
     }
   },
@@ -558,10 +594,10 @@ const boxConfigs = {
     weights: {
       Common: 7.0,
       Rare: 17.0,
-      Epic: 48.0,
-      Legendary: 25.7,
-      Mythisch: 2.0,
-      Aetherisch: 0.3
+      Epic: 61.85,
+      Legendary: 12.85,
+      Mythisch: 1.0,
+      Aetherisch: 0.15
     }
   },
   "Box#10": {
@@ -571,10 +607,10 @@ const boxConfigs = {
     weights: {
       Common: 4.0,
       Rare: 12.0,
-      Epic: 44.0,
-      Legendary: 36.9,
-      Mythisch: 2.6,
-      Aetherisch: 0.5
+      Epic: 64.2,
+      Legendary: 18.45,
+      Mythisch: 1.3,
+      Aetherisch: 0.25
     }
   },
   "Box#2": {
@@ -584,9 +620,9 @@ const boxConfigs = {
     weights: {
       Common: 66.00,
       Rare: 25.00,
-      Epic: 7.00,
-      Legendary: 1.00,
-      Mythisch: 0.10
+      Epic: 7.55,
+      Legendary: 0.50,
+      Mythisch: 0.05
     }
   },
   "Box#3": {
@@ -596,9 +632,9 @@ const boxConfigs = {
     weights: {
       Common: 57.00,
       Rare: 28.00,
-      Epic: 10.00,
-      Legendary: 2.00,
-      Mythisch: 0.30
+      Epic: 11.15,
+      Legendary: 1.00,
+      Mythisch: 0.15
     }
   },
   "Box#4": {
@@ -608,9 +644,9 @@ const boxConfigs = {
     weights: {
       Common: 46.00,
       Rare: 35.00,
-      Epic: 14.00,
-      Legendary: 3.50,
-      Mythisch: 0.50
+      Epic: 16.00,
+      Legendary: 1.75,
+      Mythisch: 0.25
     }
   },
   "Box#5": {
@@ -620,9 +656,9 @@ const boxConfigs = {
     weights: {
       Common: 35.00,
       Rare: 35.00,
-      Epic: 18.00,
-      Legendary: 5.50,
-      Mythisch: 0.70
+      Epic: 21.10,
+      Legendary: 2.75,
+      Mythisch: 0.35
     }
   },
   "Box#6": {
@@ -632,9 +668,9 @@ const boxConfigs = {
     weights: {
       Common: 25.00,
       Rare: 30.00,
-      Epic: 30.00,
-      Legendary: 7.50,
-      Mythisch: 0.90
+      Epic: 34.20,
+      Legendary: 3.75,
+      Mythisch: 0.45
     }
   },
   "Box#7": {
@@ -644,22 +680,9 @@ const boxConfigs = {
     weights: {
       Common: 15.00,
       Rare: 25.00,
-      Epic: 50.00,
-      Legendary: 9.00,
-      Mythisch: 1.00
-    }
-  },
-  "Testbox": {
-    // Dev-Box: zieht genau 1 Item pro Rarität + eine Reihe mit allen Schlüsseln
-    cost: 0,
-    columns: 5,
-    rows: 2,
-    weights: {
-      Common: 20,
-      Rare: 20,
-      Epic: 20,
-      Legendary: 20,
-      Mythisch: 20
+      Epic: 55.00,
+      Legendary: 4.50,
+      Mythisch: 0.50
     }
   },
   // Schlüssel-Räume: spezielle Räume, die nur über Schlüssel zugänglich sind
@@ -682,8 +705,8 @@ const boxConfigs = {
     weights: {
       Common: 50,
       Rare: 40,
-      Epic: 9.5,
-      Legendary: 0.5,
+      Epic: 9.75,
+      Legendary: 0.25,
       Mythisch: 0
     }
   },
@@ -694,9 +717,9 @@ const boxConfigs = {
     weights: {
       Common: 30,
       Rare: 40,
-      Epic: 28,
-      Legendary: 1.9,
-      Mythisch: 0.1
+      Epic: 29.0,
+      Legendary: 0.95,
+      Mythisch: 0.05
     }
   },
   "KeyRoom_Legendary": {
@@ -706,9 +729,9 @@ const boxConfigs = {
     weights: {
       Common: 10,
       Rare: 30,
-      Epic: 45,
-      Legendary: 14,
-      Mythisch: 1
+      Epic: 52.5,
+      Legendary: 7.0,
+      Mythisch: 0.5
     }
   },
   "KeyRoom_Mythisch": {
@@ -718,10 +741,10 @@ const boxConfigs = {
     weights: {
       Common: 0,
       Rare: 20,
-      Epic: 40,
-      Legendary: 29.8,
-      Mythisch: 10,
-      Aetherisch: 0.2
+      Epic: 60.0,
+      Legendary: 14.9,
+      Mythisch: 5.0,
+      Aetherisch: 0.1
     }
   }
 };
@@ -744,6 +767,7 @@ let boxType = "Box#1";
 let balance = 500;
 // Öffnungszustand, um Layout-Jumps beim Box-Wechsel während des Öffnens zu vermeiden
 let isOpening = false;
+let isPrestiging = false; // Verhindert mehrfaches Prestige
 let pendingBoxType = null; // gewünschter Box-Wechsel, der nach Öffnung angewendet wird
 
 // Box-Reihenfolge für Progression
@@ -761,7 +785,6 @@ const boxDisplayNames = {
   "Box#8": "Hochsicherheitstresor",
   "Box#9": "Geheimdepot",
   "Box#10": "Artefaktkammer",
-  "Testbox": "Testbox",
   "KeyRoom_Common": "Gewöhnlicher Raum",
   "KeyRoom_Rare": "Seltener Raum",
   "KeyRoom_Epic": "Epischer Raum",
@@ -782,7 +805,6 @@ function getBoxIcon(boxName) {
     "Box#8": "🏛️",
     "Box#9": "🧰",
     "Box#10": "🗝️",
-    "Testbox": "🧪",
     "KeyRoom_Common": "🚪",
     "KeyRoom_Rare": "🚪",
     "KeyRoom_Epic": "🚪",
@@ -802,9 +824,8 @@ function formatCost(cost) {
 
 // Formatierung für größere Zahlen (Kontostand etc.)
 function formatNumber(num) {
-  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-  return num.toString();
+  // Vollständige Zahlen mit Tausender-Trennzeichen
+  return num.toLocaleString('de-DE');
 }
 
 // Tracking für freigeschaltete Boxen (Set speichert Namen der unlocked Boxen)
@@ -880,14 +901,12 @@ function applyLuckBonus(weights, boxType) {
     boxMultiplier = 0.25;
   }
 
-  // Pro-Punkt-Raten: keine harten Caps mehr, damit Glück unbegrenzt skaliert
-  // Die prozentuale Verschiebung sorgt von selbst für abnehmende Zuwächse
-  const crRate = 0.01 * g * boxMultiplier;    // von Common -> Rare
-  const reRate = 0.0075 * g * boxMultiplier;  // von Rare -> Epic
-  const elRate = 0.005 * g * boxMultiplier;   // von Epic -> Legendary
-  
-  // Legendary -> Mythisch: einheitliche Rate für alle Boxen
-  const lmRate = 0.0025 * g * boxMultiplier;
+  // REDUZIERTE Pro-Punkt-Raten mit harten Caps zur Verhinderung extremer Verschiebungen
+  // Cap: Maximal 40% einer Rarität kann verschoben werden
+  const crRate = Math.min(0.40, 0.005 * g * boxMultiplier);    // von Common -> Rare (reduziert von 0.01)
+  const reRate = Math.min(0.40, 0.004 * g * boxMultiplier);    // von Rare -> Epic (reduziert von 0.0075)
+  const elRate = Math.min(0.40, 0.003 * g * boxMultiplier);    // von Epic -> Legendary (reduziert von 0.005)
+  const lmRate = Math.min(0.40, 0.0015 * g * boxMultiplier);   // Legendary -> Mythisch (reduziert von 0.0025)
 
   // Common -> Rare
   if (modifiedWeights.Common && modifiedWeights.Common > 0) {
@@ -1031,6 +1050,14 @@ function getRandomItem(boxType) {
 
 // Setzt den aktuellen Box-Typ (wird auch von HTML onclick benutzt)
 function selectBox(type) {
+  // Wenn der User manuell eine normale Box auswählt, Schlüssel-Modus abbrechen
+  if (!type.startsWith('KeyRoom_')) {
+    pendingKeyOpen = null;
+  }
+  
+  // Auto-Clicker: Box-Wechsel pausiert Auto-Öffnen (erfordert manuellen Impuls)
+  autoClickerCanRun = false;
+  
   // Wenn gerade eine Öffnung läuft, wende den Wechsel nur visuell an
   // und verschiebe den tatsächlichen Box-Wechsel bis nach der Animation.
   if (isOpening) {
@@ -1050,8 +1077,31 @@ function selectBox(type) {
   }
 
   boxType = type;
-  // Kisten-Theme anpassen
-  updateChestTheme(type);
+  
+  // Smooth Transition beim Box-Wechsel
+  const container = document.getElementById('lootContainer');
+  if (container) {
+    // Fade out
+    container.classList.add('box-switching');
+    
+    // Nach Fade-out: Grid neu erstellen und Fade in
+    setTimeout(() => {
+      // Kisten-Theme anpassen
+      updateChestTheme(type);
+      
+      // Grid neu erstellen mit den Dimensionen der neuen Box
+      createEmptyGrid();
+      
+      // Fade in
+      setTimeout(() => {
+        container.classList.remove('box-switching');
+      }, 50);
+    }, 300);
+  } else {
+    // Fallback ohne Animation
+    updateChestTheme(type);
+    createEmptyGrid();
+  }
   
   // Entferne "selected" Klasse von allen Buttons
   for (let i = 0; i < boxOrder.length; i++) {
@@ -1063,9 +1113,6 @@ function selectBox(type) {
   const idx = boxOrder.indexOf(type);
   const selectedBtn = document.getElementById(`boxBtn${idx + 1}`);
   if (selectedBtn) selectedBtn.classList.add('selected');
-  
-  // Grid neu erstellen mit den Dimensionen der neuen Box
-  createEmptyGrid();
   
   // Aktualisiere Info-Fenster, falls es offen ist
   if (dom.boxInfoModal && dom.boxInfoModal.style.display === 'block') {
@@ -1134,6 +1181,13 @@ const dom = {
   statsOverlay: document.getElementById('statsOverlay'),
   statsContent: document.getElementById('statsContent'),
   closeStatsBtn: document.getElementById('closeStatsBtn'),
+  // Leaderboard UI
+  leaderboardBtn: document.getElementById('leaderboardBtn'),
+  leaderboardModal: document.getElementById('leaderboardModal'),
+  closeLeaderboardBtn: document.getElementById('closeLeaderboardBtn'),
+  leaderboardContent: document.getElementById('leaderboardContent'),
+  displayNameInput: document.getElementById('displayNameInput'),
+  saveNameBtn: document.getElementById('saveNameBtn'),
   // Achievements UI
   achievementsBtn: document.getElementById('achievementsBtn'),
   achievementsOverlay: document.getElementById('achievementsOverlay'),
@@ -1395,90 +1449,6 @@ function updateChestTheme(forBoxType) { /* no-op */ }
 function createRummageParticle() { /* no-op */ }
 function startRummageParticles() { /* no-op */ }
 function stopRummageParticles() { /* no-op */ }
-
-// DEV toggle elements (not part of dom object to avoid breaking assumptions elsewhere)
-const devMoneyBtn = document.getElementById('devMoneyBtn');
-const devToggleCheckbox = document.getElementById('toggleDev');
-const DEV_MODE_KEY = 'lootsim_devMode_v1';
-let devMode = false;
-
-function loadDevMode() {
-  try {
-    const raw = localStorage.getItem(DEV_MODE_KEY);
-    devMode = raw === '1';
-  } catch (_) { devMode = false; }
-}
-
-function saveDevMode() {
-  try { localStorage.setItem(DEV_MODE_KEY, devMode ? '1' : '0'); } catch (_) {}
-}
-
-function setDevMode(enabled) {
-  devMode = !!enabled;
-  if (devToggleCheckbox) devToggleCheckbox.checked = devMode;
-  // Toggle dev money button
-  if (devMoneyBtn) devMoneyBtn.style.display = devMode ? '' : 'none';
-  // Toggle Testbox button explicitly
-  const idx = boxOrder.indexOf('Testbox');
-  if (idx >= 0) {
-    const btn = document.getElementById(`boxBtn${idx + 1}`);
-    if (btn) btn.style.display = devMode ? '' : 'none';
-  }
-  // Toggle green check on secret 'o'
-  try {
-    const secret = document.getElementById('secretDevSwitch');
-    if (secret) secret.classList.toggle('dev-on', devMode);
-  } catch (_) { /* ignore */ }
-  saveDevMode();
-  // Re-evaluate availability to ensure correct visibility
-  updateBoxAvailability();
-}
-
-// initialize dev mode from storage, but lock it down on production hosts
-const __isLocalhost = (typeof location !== 'undefined') && /^(localhost|127\.0\.0\.1)$/i.test(location.hostname);
-loadDevMode();
-if (!__isLocalhost) { devMode = false; saveDevMode(); }
-if (devToggleCheckbox) {
-  // Hide the toggle in production
-  if (!__isLocalhost) devToggleCheckbox.closest && devToggleCheckbox.closest('.toggle-dev') && (devToggleCheckbox.closest('.toggle-dev').style.display = 'none');
-  devToggleCheckbox.addEventListener('change', (e) => {
-    if (!__isLocalhost) { e.preventDefault(); e.target.checked = false; return; }
-    setDevMode(!!e.target.checked);
-  });
-}
-// Apply initial state to UI
-setDevMode(devMode);
-
-// Secret title toggle (press-and-hold on the hidden 'o' for 1s) — disabled on production hosts
-try {
-  const secret = document.getElementById('secretDevSwitch');
-  if (secret) {
-    if (!__isLocalhost) {
-      // Hide indicator and ignore interactions in production
-      secret.style.pointerEvents = 'none';
-    } else {
-      let holdTimer = null;
-      const startHold = () => {
-        if (holdTimer) clearTimeout(holdTimer);
-        holdTimer = setTimeout(() => {
-          setDevMode(!devMode);
-          try { console.log(`DEV ${devMode ? 'enabled' : 'disabled'}`); } catch (_) {}
-        }, 1000); // 1s hold
-      };
-      const cancelHold = () => {
-        if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
-      };
-      // Mouse events
-      secret.addEventListener('mousedown', startHold);
-      secret.addEventListener('mouseup', cancelHold);
-      secret.addEventListener('mouseleave', cancelHold);
-      // Touch events
-      secret.addEventListener('touchstart', (e) => { startHold(); }, { passive: true });
-      secret.addEventListener('touchend', cancelHold, { passive: true });
-      secret.addEventListener('touchcancel', cancelHold, { passive: true });
-    }
-  }
-} catch (_) { /* ignore */ }
 
 // ======= Tooltip-System (Custom Hover-Popup) =======
 let __lootTooltipEl = null;
@@ -1758,7 +1728,7 @@ function getKeyTargetBox(rarity) {
 }
 
 let __keysBtn = null;
-let __keysModal = null;
+// Keys modal removed
 // Vormerkung: nächste Öffnung mit Schlüssel (ohne sofort zu öffnen)
 let pendingKeyOpen = null; // { rarity: 'Epic', targetBox: 'KeyRoom_Epic' }
 // Pfeil im Schlüssel-Button und Zustand für eingeklappte Vorschau (Badges)
@@ -1828,6 +1798,18 @@ function ensureOpenBtnIconSpan() {
   return span;
 }
 
+// Gibt den korrekten Schlüssel-Icon-Pfad für eine Rarität zurück
+function getKeyIconPath(rarity) {
+  const keyIcons = {
+    Common: 'Itembilder/Common/common schlüssel.png',
+    Rare: 'Itembilder/Selten/seltener Schlüssel.png',
+    Epic: 'Itembilder/Episch/epischer Schlüssel.png',
+    Legendary: 'Itembilder/Legendär/legendärer Schlüssel.png',
+    Mythisch: 'Itembilder/Mythisch/Schlüssel Mythisch.png'
+  };
+  return keyIcons[rarity] || 'Itembilder/Common/common schlüssel.png';
+}
+
 // Aktualisiert das Icon hinter dem "Öffnen"-Text:
 //  - Standard: Box-Icon der aktuell gewählten Box
 //  - Schlüssel-Icon, wenn:
@@ -1858,7 +1840,7 @@ function updateOpenBtnIcon() {
     span.classList.remove('disabled');
     span.style.backgroundColor = colors[rarityForKeyIcon] || 'rgba(0,0,0,0.6)';
     const img = document.createElement('img');
-    img.src = 'Itembilder/Common/Schlüssel.png';
+    img.src = getKeyIconPath(rarityForKeyIcon);
     img.alt = '';
     span.appendChild(img);
   } else if (rarityForDisabledKey) {
@@ -1866,7 +1848,7 @@ function updateOpenBtnIcon() {
     // Neutraler Hintergrund für deaktivierten Zustand
     span.style.backgroundColor = '#555';
     const img = document.createElement('img');
-    img.src = 'Itembilder/Common/Schlüssel.png';
+    img.src = getKeyIconPath(rarityForDisabledKey);
     img.alt = '';
     span.appendChild(img);
   } else {
@@ -1893,7 +1875,7 @@ function setOpenBtnKeyIndicator(rarity) {
   span.style.backgroundColor = colors[rarity] || 'rgba(0,0,0,0.6)';
   // Icon
   const img = document.createElement('img');
-  img.src = 'Itembilder/Common/Schlüssel.png';
+  img.src = getKeyIconPath(rarity);
   img.alt = 'Schlüssel';
   span.appendChild(img);
   el.appendChild(span);
@@ -1935,19 +1917,9 @@ function ensureKeysButton() {
 
   renderKeysButtonBadges();
   btn.addEventListener('click', (e) => {
-    // DEV Komfort: Alt-Klick fügt je 1 Schlüssel hinzu (nur im DEV-Mode)
-    if (e.altKey && devMode) {
-      for (const r of KEYS_RARITIES) keysInventory[r] = (keysInventory[r] || 0) + 1;
-      saveProgress();
-      // Dev-Add gilt als entdeckt
-      for (const r of KEYS_RARITIES) discoveredKeyRarities.add(r);
-      saveKeyDiscovery();
-      renderKeysButtonBadges();
-      if (__keysBadgesCollapsed) setKeysBtnNotify(true);
-      return;
-    }
-    showKeysModal();
-    // Öffnen des Modals gilt als gesehen → Punkt entfernen
+    // Hauptfunktion: Toggle der Schlüsselleiste
+    toggleKeysBadges();
+    // Öffnen gilt als gesehen → Punkt entfernen
     setKeysBtnNotify(false);
   });
 }
@@ -1973,7 +1945,7 @@ function renderKeysButtonBadges() {
     iconWrap.className = 'kb-icon-wrap';
     iconWrap.style.borderColor = colors[r] || '#777';
     const img = document.createElement('img');
-    img.src = 'Itembilder/Common/Schlüssel.png';
+    img.src = getKeyIconPath(r);
     img.alt = '';
     iconWrap.appendChild(img);
     const cBadge = document.createElement('span');
@@ -2009,146 +1981,23 @@ function renderKeysButtonBadges() {
   }
 }
 
-function ensureKeysModal() {
-  if (__keysModal) return __keysModal;
-  const modal = document.createElement('div');
-  modal.id = 'keysModal';
-  modal.className = 'info-modal';
-  modal.style.display = 'none';
-  modal.innerHTML = `
-    <div class="info-content" style="max-width: 1000px;">
-      <button class="info-close" aria-label="Schließen">✖</button>
-      <h3>Schlüssel</h3>
-      <div id="keysBody"></div>
-      <div id="keysInfoArea" style="margin-top:12px;"></div>
-    </div>`;
-  document.body.appendChild(modal);
-  const closeBtn = modal.querySelector('.info-close');
-  closeBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    modal.style.setProperty('display', 'none', 'important');
-  });
-  modal.addEventListener('click', (e) => {
-    const content = modal.querySelector('.info-content');
-    if (content && !content.contains(e.target)) {
-      modal.style.setProperty('display', 'none', 'important');
-    }
-  });
-  __keysModal = modal;
-  return modal;
-}
-
-function showKeysModal() {
-  const modal = ensureKeysModal();
-  const body = modal.querySelector('#keysBody');
-  const infoArea = modal.querySelector('#keysInfoArea');
-  body.innerHTML = '';
-  infoArea.innerHTML = '';
-
-  const abbrev = { Common: 'Gewöhnlich', Rare: 'Selten', Epic: 'Episch', Legendary: 'Legendär', Mythisch: 'Mythisch' };
-  for (const r of KEYS_RARITIES) {
-    const row = document.createElement('div');
-    row.className = 'keys-row';
-
-    const count = keysInventory[r] || 0;
-    const target = getKeyTargetBox(r);
-    const targetName = target ? (boxDisplayNames[target] || target) : '—';
-
-    // Key icon with counter badge
-    const keyCell = document.createElement('div');
-    keyCell.className = 'key-cell';
-    const iconWrap = document.createElement('div');
-    iconWrap.className = 'key-icon-wrap';
-    iconWrap.style.borderColor = colors[r] || '#777';
-    const keyImg = document.createElement('img');
-    keyImg.src = 'Itembilder/Common/Schlüssel.png';
-    keyImg.alt = `Schlüssel ${abbrev[r]}`;
-    iconWrap.appendChild(keyImg);
-    const badge = document.createElement('span');
-    badge.className = 'key-counter-badge';
-    badge.textContent = String(count);
-    iconWrap.appendChild(badge);
-    const rarityLabel = document.createElement('div');
-    rarityLabel.className = 'key-rarity-label';
-    rarityLabel.style.color = colors[r] || '#fff';
-    rarityLabel.textContent = abbrev[r];
-    keyCell.appendChild(iconWrap);
-    keyCell.appendChild(rarityLabel);
-
-    // Arrow between key and door
-    const arrowCell = document.createElement('div');
-    arrowCell.className = 'arrow-cell';
-    arrowCell.textContent = '→';
-
-    // Door target
-    const doorCell = document.createElement('div');
-    doorCell.className = 'door-cell';
-    const doorEmoji = document.createElement('div');
-    doorEmoji.className = 'door-emoji';
-    doorEmoji.textContent = target ? (getBoxIcon(target) || '🚪') : '—';
-    const doorLabel = document.createElement('div');
-    doorLabel.className = 'door-label';
-    doorLabel.textContent = targetName;
-    doorCell.appendChild(doorEmoji);
-    doorCell.appendChild(doorLabel);
-
-    // Actions on the right (Info, Öffnen)
-    const actions = document.createElement('div');
-    actions.className = 'key-actions';
-    const infoBtn = document.createElement('button');
-    infoBtn.className = 'box-info-btn';
-    infoBtn.textContent = 'Info';
-    infoBtn.addEventListener('click', () => {
-      renderKeyTargetInfo(r, infoArea);
-    });
-    const useBtn = document.createElement('button');
-    useBtn.className = 'box-info-btn';
-    useBtn.textContent = 'Öffnen';
-    useBtn.disabled = count <= 0 || isOpening || !target;
-    useBtn.addEventListener('click', () => {
-      if (count <= 0 || isOpening || !target) return;
-      // Nur vormerken: Zielraum setzen und Öffnen-Button kennzeichnen
-      openWithKey(r);
-    });
-    actions.appendChild(infoBtn);
-    actions.appendChild(useBtn);
-
-    row.appendChild(keyCell);
-    row.appendChild(arrowCell);
-    row.appendChild(doorCell);
-    row.appendChild(actions);
-    body.appendChild(row);
-  }
-  modal.style.display = 'block';
-}
+// Keys modal removed - all key functions removed
 
 function renderKeyTargetInfo(rarity, container) {
-  const target = getKeyTargetBox(rarity);
-  if (!target) { container.innerHTML = '<em>Keine Zielkiste konfiguriert.</em>'; return; }
-  const info = computeRarityStats(target);
-  const stats = info.rows;
-  const displayName = boxDisplayNames[target] || target;
-  const icon = getBoxIcon(target);
-  let html = `<div class="info-header"><strong>${icon} ${displayName}</strong></div>`;
-  html += '<table class="info-table"><thead><tr><th>Rarität</th><th>Dropchance</th></tr></thead><tbody>';
-  for (const s of stats) {
-    html += `<tr><td class="rarity-name" style="color:${colors[s.rarity]||'#fff'}">${s.rarity}</td><td>${s.chance.toFixed(2)} %</td></tr>`;
-  }
-  html += '</tbody></table>';
-  container.innerHTML = html;
+  // Function removed - keys modal deleted
 }
 
 function openWithKey(rarity) {
   const target = getKeyTargetBox(rarity);
   if (!target) return;
   if ((keysInventory[rarity] || 0) <= 0) return;
+  
   // Nur vormerken, nicht sofort öffnen
   pendingKeyOpen = { rarity, targetBox: target };
+  
   // UI: Box auswählen (visuell) und Öffnen-Button mit Schlüssel kennzeichnen
   selectBox(target);
   updateOpenBtnIcon();
-  // Modal schließen
-  if (__keysModal) __keysModal.style.setProperty('display', 'none', 'important');
 }
 
 // ======= Item-Tracker (Persistenz) =======
@@ -2208,12 +2057,17 @@ function saveCounts() {
 }
 
 // Speichere und lade kompletten Fortschritt
+let saveProgressTimeout = null;
+let lastFirebaseSync = 0;
+const FIREBASE_SYNC_COOLDOWN = 3000; // 3 Sekunden Cooldown
+
 function saveProgress() {
   try {
     const progress = {
       balance,
       playerLevel,
       playerXP,
+      totalXPEarned,
       skillPoints,
       skills: { ...skills },
       boxType,
@@ -2228,8 +2082,76 @@ function saveProgress() {
       prestigeState: { ...prestigeState }
     };
     localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+    
+    // Firebase Cloud Sync mit Debounce
+    clearTimeout(saveProgressTimeout);
+    saveProgressTimeout = setTimeout(() => {
+      syncToFirebase(progress);
+    }, 1000); // 1 Sekunde Debounce für häufige Saves
   } catch (e) {
     console.warn('Failed to save progress', e);
+  }
+}
+
+// Sync game data to Firebase
+function syncToFirebase(progress) {
+  try {
+    if (!window.firebaseApi || typeof window.firebaseApi.syncUserData !== 'function') {
+      return;
+    }
+    
+    // Cooldown-Check: Nicht öfter als alle 3 Sekunden syncen
+    const now = Date.now();
+    if (now - lastFirebaseSync < FIREBASE_SYNC_COOLDOWN) {
+      return;
+    }
+    lastFirebaseSync = now;
+    
+    // Count mythics and aetherics using safe helper function
+    let mythicsFound = 0;
+    let aethericsFound = 0;
+    try {
+      mythicsFound = getDiscoveredCountByRarity('Mythisch') || 0;
+      aethericsFound = getDiscoveredCountByRarity('Aetherisch') || 0;
+    } catch (e) {
+      console.warn('Could not count mythics/aetherics:', e);
+    }
+    
+    const userData = {
+      displayName: localStorage.getItem('playerDisplayName') || 'Anonym',
+      totalXPEarned: progress.totalXPEarned,
+      totalBoxesOpened: progress.stats.totalBoxesOpened || 0,
+      mythicsFound,
+      aethericsFound,
+      balance: progress.balance,
+      playerLevel: progress.playerLevel,
+      playerXP: progress.playerXP,
+      skillPoints: progress.skillPoints,
+      skills: progress.skills,
+      prestigeLevel: progress.prestigeState?.level || 0,
+      runBoxesOpened: progress.prestigeState?.runBoxesOpened || 0,
+      activeBoosts: progress.activeBoosts,
+      permanentUpgrades: progress.permanentUpgrades,
+      purchasedItems: progress.purchasedItems,
+      statUpgradesLevels: progress.statUpgradesLevels,
+      keysInventory: progress.keysInventory,
+      boxType: progress.boxType,
+      unlockedBoxes: progress.unlockedBoxes,
+      stats: progress.stats
+    };
+    
+    // Non-blocking sync - wait for Firebase ready
+    window.firebaseApi.ready().then(() => {
+      return window.firebaseApi.syncUserData(userData);
+    }).then(() => {
+      // Sync successful
+    }).catch(err => {
+      console.warn('Firebase sync failed:', err);
+      lastFirebaseSync = 0; // Reset bei Fehler, damit Retry möglich
+    });
+  } catch (err) {
+    console.warn('Firebase sync error:', err);
+    lastFirebaseSync = 0; // Reset bei Fehler
   }
 }
 
@@ -2242,6 +2164,16 @@ function loadProgress() {
     if (progress.balance !== undefined) balance = progress.balance;
     if (progress.playerLevel !== undefined) playerLevel = progress.playerLevel;
     if (progress.playerXP !== undefined) playerXP = progress.playerXP;
+    if (progress.totalXPEarned !== undefined) {
+      totalXPEarned = progress.totalXPEarned;
+    } else {
+      // Migration: Berechne totalXPEarned aus Level + aktuellem XP
+      let calculatedTotal = playerXP;
+      for (let lvl = 1; lvl < playerLevel; lvl++) {
+        calculatedTotal += getXPForLevel(lvl);
+      }
+      totalXPEarned = calculatedTotal;
+    }
     if (progress.skillPoints !== undefined) skillPoints = progress.skillPoints;
     if (progress.skills) {
       skills.wohlstand = progress.skills.wohlstand || 0;
@@ -2292,6 +2224,9 @@ function loadProgress() {
       if (permanentUpgrades.permValueBoost > 1) permanentUpgrades.permValueBoost = 1;
       if (permanentUpgrades.permXPBoost > 1) permanentUpgrades.permXPBoost = 1;
       if (permanentUpgrades.permPotionBelt > 1) permanentUpgrades.permPotionBelt = 1;
+      if (permanentUpgrades.permAutoClicker > 1) permanentUpgrades.permAutoClicker = 1;
+      if (permanentUpgrades.permAutoClickerSpeed1 > 1) permanentUpgrades.permAutoClickerSpeed1 = 1;
+      if (permanentUpgrades.permAutoClickerSpeed2 > 1) permanentUpgrades.permAutoClickerSpeed2 = 1;
     }
     if (progress.purchasedItems) {
       purchasedItems.clear();
@@ -2318,6 +2253,11 @@ function loadProgress() {
       } catch (_) {
         // falls altes Save ohne Feld: bisherigen Wert beibehalten (Default 0)
         prestigeState.runBoxesOpened = prestigeState.runBoxesOpened || 0;
+      }
+      
+      // Migration: Wenn runBoxesOpened 0 ist aber totalBoxesOpened > 0, initialisiere mit totalBoxesOpened
+      if ((prestigeState.runBoxesOpened || 0) === 0 && (progress.stats?.totalBoxesOpened || 0) > 0) {
+        prestigeState.runBoxesOpened = progress.stats.totalBoxesOpened;
       }
     }
   } catch (e) {
@@ -2381,6 +2321,11 @@ function createEmptyGrid() {
 
 // Event-Handler für den Öffnen-Button
 dom.openBtn.addEventListener('click', async () => {
+  // Auto-Clicker: Erlaube Auto-Runs nach manuellem Öffnen
+  if (autoClickerEnabled && (permanentUpgrades.permAutoClicker || 0) >= 1) {
+    autoClickerCanRun = true;
+  }
+  
   // Markiere, dass eine Öffnung läuft
   isOpening = true;
   // Button deaktivieren und ausgrauen
@@ -2476,8 +2421,8 @@ dom.openBtn.addEventListener('click', async () => {
   const columns = boxConfigs[openBoxType].columns || 4;
   const rows = boxConfigs[openBoxType].rows || 3;
   const totalSlots = columns * rows;
-  const itemCount = (openBoxType === 'Testbox') ? (rarities.length * 2) : getWeightedItemCount(openBoxType);
-  const desiredRarities = (openBoxType === 'Testbox') ? [...rarities, ...rarities] : null;
+  const itemCount = getWeightedItemCount(openBoxType);
+  const desiredRarities = null;
   let roundValue = 0;
   
   // Container leeren und Grid neu aufbauen
@@ -2513,31 +2458,7 @@ dom.openBtn.addEventListener('click', async () => {
 
   for (let i = 0; i < revealSlots.length; i++) {
     const { item } = revealSlots[i];
-    const pulledItem = (openBoxType === 'Testbox')
-      ? (() => {
-          const rar = desiredRarities[i % desiredRarities.length];
-          const pool = itemPools[rar] || itemPools.Common;
-          // Erste Reihe: normale Items; zweite Reihe: nur Schlüssel
-          const isSecondRow = i >= rarities.length;
-          let itm;
-          if (isSecondRow) {
-            // Suche den Schlüssel dieser Rarität aus dem Pool
-            const keyItem = pool.find(it => it.isKey);
-            itm = keyItem || sample(pool);
-          } else {
-            // Normale gewichtete Auswahl
-            itm = weightedSampleByDropWeight(pool) || sample(pool);
-          }
-          const baseValue = itm.value || 0;
-          const multiplier = getValueMultiplier();
-          return { 
-            ...itm, 
-            rarity: rar, 
-            baseValue: baseValue,
-            value: Math.floor(baseValue * multiplier) 
-          };
-        })()
-      : getRandomItem(openBoxType);
+    const pulledItem = getRandomItem(openBoxType);
     const name = pulledItem.name || 'Unbekannter Gegenstand';
     const isNew = !discoveredItems.has(name);
 
@@ -2771,10 +2692,25 @@ dom.openBtn.addEventListener('click', async () => {
   
   addXP(xpGain);
   
-  // Reduziere temporäre Boost-Uses
-  if (activeBoosts.valueBoostUses > 0) activeBoosts.valueBoostUses--;
-  if (activeBoosts.rarityBoostUses > 0) activeBoosts.rarityBoostUses--;
-  if (activeBoosts.xpBoostUses > 0) activeBoosts.xpBoostUses--;
+  // Reduziere temporäre Boost-Uses und zeige Animation
+  const boostsUsed = [];
+  if (activeBoosts.valueBoostUses > 0) {
+    activeBoosts.valueBoostUses--;
+    boostsUsed.push('valueBoost');
+  }
+  if (activeBoosts.rarityBoostUses > 0) {
+    activeBoosts.rarityBoostUses--;
+    boostsUsed.push('rarityBoost');
+  }
+  if (activeBoosts.xpBoostUses > 0) {
+    activeBoosts.xpBoostUses--;
+    boostsUsed.push('xpBoost');
+  }
+  
+  // Zeige Potion-Use-Effekt wenn Tränke verbraucht wurden
+  if (boostsUsed.length > 0) {
+    showPotionUseEffects(boostsUsed);
+  }
   
   updateBalance();
   // Quickslots-Badges refreshen
@@ -2793,6 +2729,10 @@ dom.openBtn.addEventListener('click', async () => {
 
   // Öffnung ist beendet
   isOpening = false;
+  
+  // Auto-Clicker: Setze Zeitstempel für Ende der Öffnung (Start der 3s Wartezeit)
+  autoClickerLastOpen = Date.now();
+  
   // Quickslots/Shop nach Abschluss wieder freigeben (erneut rendern, jetzt wo isOpening=false)
   try {
     renderQuickslots();
@@ -2807,6 +2747,27 @@ dom.openBtn.addEventListener('click', async () => {
   updateAchievementsNotify();
   // Nach jedem Öffnen: Prestige-Bedingungen erneut prüfen (Glow)
   try { updatePrestigeUI(); } catch (_) {}
+
+  // Firebase: Stats synchronisieren nach jedem Öffnen
+  try {
+    if (window.firebaseApi && typeof window.firebaseApi.updateStats === 'function') {
+      const mythCount = Math.max(0, getDiscoveredCountByRarity('Mythisch') || 0);
+      const aetherCount = Math.max(0, getDiscoveredCountByRarity('Aetherisch') || 0);
+      const payload = {
+        totalXP: Number(totalXPEarned || 0),
+        mythicsFound: Number(mythCount || 0),
+        aethericsFound: Number(aetherCount || 0),
+        totalBoxesOpened: Number((stats && stats.totalBoxesOpened) || 0),
+        displayName: localStorage.getItem('playerDisplayName') || undefined
+      };
+      // Nicht blockierend - Fire and forget
+      window.firebaseApi.updateStats(payload).catch(err => {
+        console.warn('Failed to sync stats to Firebase:', err);
+      });
+    }
+  } catch (err) {
+    console.warn('Firebase sync error:', err);
+  }
 
   // Falls während der Öffnung eine andere Box gewählt wurde, jetzt anwenden
   if (pendingBoxType) {
@@ -2829,6 +2790,10 @@ dom.openBtn.addEventListener('click', async () => {
 // Fügt XP hinzu und prüft auf Level-Up
 function addXP(amount) {
   playerXP += amount;
+  totalXPEarned += amount; // Tracke Gesamt-XP
+  
+  // Zeige XP-Gain-Effekt
+  showXPGainEffect(amount);
   
   // Level-Up prüfen (mit Level-Cap bei 50)
   let xpNeeded = getXPForLevel(playerLevel);
@@ -2935,6 +2900,88 @@ function showEarnedMoneyEffect(amount) {
   }, 2000);
 }
 
+function showXPGainEffect(amount) {
+  const xpBarElement = document.getElementById('xpBarContainer');
+  if (!xpBarElement) return;
+  
+  const rect = xpBarElement.getBoundingClientRect();
+  
+  const xpEffect = document.createElement('div');
+  xpEffect.className = 'xp-gained-effect';
+  xpEffect.textContent = `+${formatNumber(amount)} XP`;
+  
+  // Position relativ zur XP-Bar
+  xpEffect.style.left = `${rect.left + rect.width / 2}px`;
+  xpEffect.style.top = `${rect.top}px`;
+  
+  document.body.appendChild(xpEffect);
+  
+  // Entfernen nach Animation
+  setTimeout(() => {
+    xpEffect.remove();
+  }, 2000);
+}
+
+function showPotionUseEffects(boostsUsed) {
+  const owned = (permanentUpgrades.permPotionBelt || 0) >= 1;
+  
+  // Mapping von Boost-Typ zu Quickslot-Index
+  const boostToIndex = {
+    'valueBoost': 0,
+    'rarityBoost': 1,
+    'xpBoost': 2
+  };
+  
+  boostsUsed.forEach((boostType, idx) => {
+    const slotIndex = boostToIndex[boostType];
+    let sourceElement = null;
+    
+    // Wenn Trankgürtel gekauft: Animation von Quickslot
+    if (owned) {
+      const quickslots = document.getElementById('quickslots');
+      if (quickslots) {
+        const buttons = quickslots.querySelectorAll('.quickslot-btn');
+        if (buttons[slotIndex]) {
+          sourceElement = buttons[slotIndex];
+          
+          // Badge rot flashen
+          const badge = sourceElement.querySelector('.quickslot-badge');
+          if (badge) {
+            badge.classList.add('flash-red');
+            setTimeout(() => {
+              badge.classList.remove('flash-red');
+            }, 300);
+          }
+        }
+      }
+    }
+    
+    // Fallback: Shop-Button wenn kein Trankgürtel
+    if (!sourceElement) {
+      sourceElement = document.getElementById('shopBtn');
+    }
+    
+    if (!sourceElement) return;
+    
+    const rect = sourceElement.getBoundingClientRect();
+    
+    const potionEffect = document.createElement('div');
+    potionEffect.className = 'potion-use-effect';
+    potionEffect.textContent = `-1`;
+    
+    // Position relativ zum Source-Element (zentriert)
+    potionEffect.style.left = `${rect.left + rect.width / 2}px`;
+    potionEffect.style.top = `${rect.top}px`;
+    
+    document.body.appendChild(potionEffect);
+    
+    // Entfernen nach Animation
+    setTimeout(() => {
+      potionEffect.remove();
+    }, 2000);
+  });
+}
+
 // Zeigt eine gelbe "+Schlüssel"-Animation in der Nähe des Schlüssel-Buttons (Fallback: beim Kontostand)
 function showKeyFoundEffect(amount) {
   const anchor = (typeof __keysBtn !== 'undefined' && __keysBtn) ? __keysBtn : dom.balance;
@@ -2987,11 +3034,6 @@ function updateBoxAvailability() {
     const btn = document.getElementById(`boxBtn${i + 1}`);
     
     if (!btn) continue;
-    // Hide Testbox entirely if dev mode is off
-    if (boxName === 'Testbox' && !devMode) {
-      btn.style.display = 'none';
-      continue;
-    }
     
     const isUnlocked = unlockedBoxes.has(boxName);
     const canAfford = balance >= boxCost;
@@ -3269,7 +3311,18 @@ function showShop() {
 
   // 1) Ausrüstung
   const equipGrid = makeSection('Ausrüstung');
+  
+  // Auto-Clicker Upgrade-Status prüfen
+  const hasAutoClicker = (permanentUpgrades.permAutoClicker || 0) >= 1;
+  const hasSpeed1 = (permanentUpgrades.permAutoClickerSpeed1 || 0) >= 1;
+  const hasSpeed2 = (permanentUpgrades.permAutoClickerSpeed2 || 0) >= 1;
+  
   for (const [itemId, item] of Object.entries(shopItems).filter(([, it]) => it.type === 'perm')) {
+    // Auto-Clicker Upgrade-Logik: Nur das nächste verfügbare anzeigen (außer Speed2, bleibt immer sichtbar)
+    if (itemId === 'permAutoClicker' && hasAutoClicker) continue; // Basis bereits gekauft
+    if (itemId === 'permAutoClickerSpeed1' && (!hasAutoClicker || hasSpeed1)) continue; // Basis fehlt oder Speed1 bereits gekauft
+    if (itemId === 'permAutoClickerSpeed2' && !hasSpeed1) continue; // Speed1 fehlt -> Speed2 nicht zeigen
+    
     const branch = document.createElement('div');
     branch.className = 'skill-branch';
     const canAfford = balance >= item.cost;
@@ -3393,6 +3446,23 @@ function purchaseShopItem(itemId) {
     }
     permanentUpgrades[effect.type] = 1; // genau einmal
     purchasedItems.add(itemId);
+    
+    // Auto-Clicker aktivieren falls gekauft
+    if (effect.type === 'permAutoClicker') {
+      checkAutoClicker();
+    }
+    // Auto-Clicker Speed Upgrades
+    if (effect.type === 'permAutoClickerSpeed1' || effect.type === 'permAutoClickerSpeed2') {
+      // Nur Speed wechseln wenn bereits aktiviert
+      if (autoClickerEnabled) {
+        if (effect.type === 'permAutoClickerSpeed2') {
+          autoClickerSpeed = 1;
+        } else if (effect.type === 'permAutoClickerSpeed1') {
+          autoClickerSpeed = 2;
+        }
+      }
+      updateAutoClickerUI();
+    }
   }
   
   // Speichere Fortschritt
@@ -3435,21 +3505,12 @@ if (dom.shopModal) {
   });
 }
 
-// Dev Money Button
-if (devMoneyBtn) {
-  devMoneyBtn.addEventListener('click', () => {
-    balance += 1000000;
-    updateBalance();
-    saveProgress();
-  });
-}
-
 // Reset-Button
 dom.resetBtn.addEventListener('click', () => {
   if (confirm('Möchtest du deinen gesamten Fortschritt zurücksetzen? Dies kann nicht rückgängig gemacht werden!')) {
     resetProgress();
-    // Sammlung schließen nach dem Reset
-    closeCollection();
+    // Stats schließen nach dem Reset
+    closeStats();
   }
 });
 
@@ -3472,6 +3533,7 @@ function resetProgress() {
   // Level & Skills zurücksetzen
   playerLevel = 0;
   playerXP = 0;
+  totalXPEarned = 0; // Gesamt-XP zurücksetzen
   skillPoints = 0;
   skills.wohlstand = 0;
   skills.glueck = 0;
@@ -3529,6 +3591,19 @@ function resetProgress() {
   updateSkillDisplay();
   selectBox("Box#1");
   updateAchievementsNotify();
+  
+  // Firebase: Vollständiger Reset über Cloud Function
+  try {
+    if (window.firebaseApi && typeof window.firebaseApi.resetUserData === 'function') {
+      const displayName = localStorage.getItem('playerDisplayName') || 'Anonym';
+      // Nicht blockierend
+      window.firebaseApi.resetUserData(displayName).catch(err => {
+        console.warn('Failed to reset data in Firebase:', err);
+      });
+    }
+  } catch (err) {
+    console.warn('Firebase reset error:', err);
+  }
   
   // Sammlung schließen (falls geöffnet)
   if (dom.collectionOverlay) {
@@ -3650,7 +3725,7 @@ function showCollection() {
   dom.collectionOverlay.style.display = 'block';
 }
 
-document.getElementById("closeCollectionBtn").addEventListener("click", closeCollection);
+dom.closeCollectionBtn.addEventListener("click", closeCollection);
 
 function closeCollection() {
   dom.collectionOverlay.style.display = 'none';
@@ -3896,6 +3971,105 @@ function closeAchievements() {
 dom.statsBtn.addEventListener('click', showStats);
 dom.closeStatsBtn.addEventListener('click', closeStats);
 
+// ======= Leaderboard =======
+if (dom.leaderboardBtn) {
+  dom.leaderboardBtn.addEventListener('click', showLeaderboard);
+}
+if (dom.closeLeaderboardBtn) {
+  dom.closeLeaderboardBtn.addEventListener('click', closeLeaderboard);
+}
+if (dom.saveNameBtn) {
+  dom.saveNameBtn.addEventListener('click', saveDisplayName);
+}
+
+async function showLeaderboard() {
+  dom.leaderboardModal.style.display = 'flex';
+  
+  // Lade gespeicherten Namen
+  const savedName = localStorage.getItem('playerDisplayName') || '';
+  dom.displayNameInput.value = savedName;
+  
+  // Lade Leaderboard
+  dom.leaderboardContent.innerHTML = '<p style="text-align:center;">Lade Leaderboard...</p>';
+  
+  try {
+    const leaderboard = await window.firebaseApi.fetchGlobalLeaderboard(50);
+    
+    if (!leaderboard || leaderboard.length === 0) {
+      dom.leaderboardContent.innerHTML = '<p style="text-align:center;">Noch keine Einträge vorhanden.</p>';
+      return;
+    }
+    
+    let html = '<table style="width:100%; border-collapse:collapse;">';
+    html += '<thead><tr style="border-bottom:2px solid #ccc;">';
+    html += '<th style="padding:8px; text-align:center;">Rang</th>';
+    html += '<th style="padding:8px; text-align:left;">Name</th>';
+    html += '<th style="padding:8px; text-align:center;">XP</th>';
+    html += '<th style="padding:8px; text-align:center;">⭐</th>';
+    html += '</tr></thead><tbody>';
+    
+    const currentUid = window.firebaseApi.getCurrentUid();
+    
+    leaderboard.forEach((entry, index) => {
+      const isCurrentUser = entry.uid === currentUid;
+      const rowStyle = isCurrentUser ? 'background-color: rgba(241, 196, 15, 0.2); font-weight: bold;' : '';
+      
+      // Medaillen für Top 3
+      let rankDisplay;
+      if (index === 0) {
+        rankDisplay = '🥇'; // Gold
+      } else if (index === 1) {
+        rankDisplay = '🥈'; // Silber
+      } else if (index === 2) {
+        rankDisplay = '🥉'; // Bronze
+      } else {
+        rankDisplay = index + 1;
+      }
+      
+      html += `<tr style="${rowStyle}">`;
+      html += `<td style="padding:8px; text-align:center; font-size:${index < 3 ? '20px' : '14px'};">${rankDisplay}</td>`;
+      html += `<td style="padding:8px; text-align:left;">${entry.displayName}</td>`;
+      html += `<td style="padding:8px; text-align:center;">${(entry.totalXP || 0).toLocaleString('de-DE')}</td>`;
+      html += `<td style="padding:8px; text-align:center;">${entry.prestigeLevel || 0}</td>`;
+      html += '</tr>';
+    });
+    
+    html += '</tbody></table>';
+    dom.leaderboardContent.innerHTML = html;
+  } catch (error) {
+    console.error('Error loading leaderboard:', error);
+    dom.leaderboardContent.innerHTML = '<p style="text-align:center; color:red;">Fehler beim Laden des Leaderboards.</p>';
+  }
+}
+
+function closeLeaderboard() {
+  dom.leaderboardModal.style.display = 'none';
+}
+
+async function saveDisplayName() {
+  const name = dom.displayNameInput.value.trim();
+  
+  if (!name) {
+    alert('Bitte gib einen Namen ein.');
+    return;
+  }
+  
+  if (name.length > 20) {
+    alert('Name darf maximal 20 Zeichen lang sein.');
+    return;
+  }
+  
+  try {
+    await window.firebaseApi.setDisplayName(name);
+    alert('Name gespeichert!');
+    // Leaderboard neu laden
+    showLeaderboard();
+  } catch (error) {
+    console.error('Error saving display name:', error);
+    alert('Fehler beim Speichern des Namens: ' + error.message);
+  }
+}
+
 function showStats() {
   const content = dom.statsContent;
   content.innerHTML = '';
@@ -4099,7 +4273,7 @@ function canPrestige() {
   } else {
     hasRarity = getDiscoveredCountByRarity('Aetherisch') >= req.needed;
   }
-  // Bedingung: 200 Boxen seit letztem Prestige (nicht Lifetime)
+  // Bedingung: 200 Boxen seit letztem Prestige
   const hasBoxes = (prestigeState.runBoxesOpened || 0) >= 200;
   return hasLevel && hasRarity && hasBoxes;
 }
@@ -4138,11 +4312,6 @@ function updatePrestigeUI() {
           <li class="${cRarity ? 'ok' : 'fail'}">- ${req.needed} ${reqLabel} Items <span style="opacity:0.85">(${Math.min(haveCount, req.needed)}/${req.needed})</span> ${cRarity ? '✓' : ''}</li>
           <li class="${cBoxes ? 'ok' : 'fail'}">- 200 Boxen geöffnet <span style="opacity:0.85">(${Math.min(runBoxes,200)}/200)</span> ${cBoxes ? '✓' : ''}</li>
         </ul>
-        <div class="prestige-status" style="opacity:.9; font-size:13px; margin:-4px 0 10px 0;">
-          <span id="prestigeLocalCounts">Lokal: Mythisch=${mythCount}, Ätherisch=${aetherCount}, Boxen seit Prestige=${runBoxes}</span>
-          <button id="syncStatsBtn" class="upgrade-btn" style="margin-left:8px; padding:4px 10px; font-size:12px; width:auto;">Sync jetzt</button>
-          <span id="syncResult" style="margin-left:8px; opacity:.85"></span>
-        </div>
         <h3>Auswirkungen</h3>
         <p>Run-Reset:</p>
         <ul>
@@ -4189,8 +4358,35 @@ if (dom.prestigeModal) {
 }
 
 async function doPrestige() {
+  if (isOpening) {
+    alert('Bitte warte, bis die Box-Öffnung abgeschlossen ist.');
+    return;
+  }
+  
+  // Verhindere mehrfache Prestige-Aufrufe
+  if (isPrestiging) {
+    console.warn('Prestige bereits in Bearbeitung');
+    return;
+  }
+  
   if (!canPrestige()) {
-    alert(`Du musst Level ${MAX_LEVEL} erreichen, um zu prestigen.`);
+    // Zeige detaillierte Fehlermeldung
+    const hasLevel = playerLevel >= MAX_LEVEL;
+    const req = getPrestigeRarityRequirement(prestigeState.level || 0);
+    const hasRarity = req.type === 'Mythisch' 
+      ? getDiscoveredCountByRarity('Mythisch') >= req.needed
+      : getDiscoveredCountByRarity('Aetherisch') >= req.needed;
+    const hasBoxes = (prestigeState.runBoxesOpened || 0) >= 200;
+    
+    let msg = 'Prestige-Bedingungen noch nicht erfüllt:\n';
+    if (!hasLevel) msg += `\n❌ Level ${MAX_LEVEL} erreichen (aktuell: ${playerLevel})`;
+    if (!hasRarity) {
+      const count = req.type === 'Mythisch' ? getDiscoveredCountByRarity('Mythisch') : getDiscoveredCountByRarity('Aetherisch');
+      msg += `\n❌ ${req.needed} ${req.type}e Items finden (aktuell: ${count})`;
+    }
+    if (!hasBoxes) msg += `\n❌ 200 Boxen öffnen (aktuell: ${prestigeState.runBoxesOpened || 0})`;
+    
+    alert(msg);
     return;
   }
   // Sicherheitsabfrage
@@ -4198,25 +4394,49 @@ async function doPrestige() {
     return;
   }
 
-  // Vor dem Server-Call: letzte Stats hochschieben, damit der Server valide prüfen kann
+  // Setze Lock
+  isPrestiging = true;
+
+  // Vor dem Server-Call: ALLE Daten inkl. runBoxesOpened synchronisieren
   try {
-    if (window.firebaseApi && typeof window.firebaseApi.updateStats === 'function') {
-      const mythCount = Math.max(0, getDiscoveredCountByRarity('Mythisch') || 0);
-      const aetherCount = Math.max(0, getDiscoveredCountByRarity('Aetherisch') || 0);
-      const payload = {
-        totalXP: Number(playerXP || 0),
-        mythicsFound: Number(mythCount || 0),
-        aethericsFound: Number(aetherCount || 0),
-        totalBoxesOpened: Number((stats && stats.totalBoxesOpened) || 0),
+    if (window.firebaseApi && typeof window.firebaseApi.syncUserData === 'function') {
+      // Force sync ignorieren des Cooldowns
+      lastFirebaseSync = 0;
+      
+      const progress = {
+        balance,
+        playerLevel,
+        playerXP,
+        totalXPEarned,
+        skillPoints,
+        skills: { ...skills },
+        boxType,
+        unlockedBoxes: Array.from(unlockedBoxes),
+        stats: { ...stats },
+        achievementsState: { ...achievementsState },
+        activeBoosts: { ...activeBoosts },
+        permanentUpgrades: { ...permanentUpgrades },
+        purchasedItems: Array.from(purchasedItems),
+        statUpgradesLevels: { ...statUpgradesLevels },
+        keysInventory: { ...keysInventory },
+        prestigeState: { ...prestigeState }
       };
-      // Wichtig: auf den Write warten, damit die Function konsistente Werte liest
-      await window.firebaseApi.updateStats(payload);
+      
+      // Sync erzwingen
+      syncToFirebase(progress);
+      
+      // Kurz warten damit Server die Daten hat
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       try {
         const resEl = document.getElementById('syncResult');
-        if (resEl) { resEl.textContent = '✔ Server synchronisiert'; resEl.style.color = '#2ecc71'; setTimeout(()=>{ resEl.textContent=''; }, 3000); }
+        if (resEl) { resEl.textContent = '✔ Daten synchronisiert'; resEl.style.color = '#2ecc71'; setTimeout(()=>{ resEl.textContent=''; }, 3000); }
       } catch(_){}
     }
-  } catch (_) { /* ignore */ }
+  } catch (err) { 
+    console.warn('Pre-prestige sync failed:', err);
+    isPrestiging = false; // Unlock bei Fehler
+  }
 
   // Server-seitige Prestige-Erhöhung (Cloud Function)
   try {
@@ -4228,7 +4448,9 @@ async function doPrestige() {
         prestigeState.level = Number(prestigeLevel || ((prestigeState.level||0)+1));
         // Danach lokalen Reset durchführen
         proceedAfterPrestige();
+        isPrestiging = false; // Unlock nach Erfolg
       }).catch((e)=>{
+        isPrestiging = false; // Unlock bei Fehler
         try {
           const code = (e && (e.code||e.error?.code)) || '';
           if (code.includes('unauth')) {
@@ -4255,12 +4477,17 @@ async function doPrestige() {
         }
         console.warn('Prestige server failed', e);
       });
+    } else {
+      isPrestiging = false; // Unlock wenn API nicht verfügbar
+      // Fallback zu lokalem Prestige (offline-Modus)
+      prestigeState.level = (prestigeState.level || 0) + 1;
+      proceedAfterPrestige();
     }
-  } catch (_) { /* ignore */ }
-
-  // Fallback: lokal erhöhen (offline)
-  prestigeState.level = (prestigeState.level || 0) + 1;
-  proceedAfterPrestige();
+  } catch (err) {
+    isPrestiging = false; // Unlock bei Fehler
+    console.error('Prestige error:', err);
+    alert('Prestige fehlgeschlagen. Bitte später erneut versuchen.');
+  }
 }
 
 function proceedAfterPrestige() {
@@ -4271,6 +4498,7 @@ function proceedAfterPrestige() {
   balance = 500;
   playerLevel = 0;
   playerXP = 0;
+  totalXPEarned = 0; // Gesamt-XP zurücksetzen bei Prestige
   skillPoints = 0;
   skills.wohlstand = 0;
   skills.glueck = 0;
@@ -4278,9 +4506,15 @@ function proceedAfterPrestige() {
 
   // Shop/Upgrades zurücksetzen
   activeBoosts = { valueBoost: 0, rarityBoost: 0, xpBoost: 0, valueBoostUses: 0, rarityBoostUses: 0, xpBoostUses: 0 };
-  permanentUpgrades = { permTempoBoost: 0, permValueBoost: 0, permXPBoost: 0, permPotionBelt: 0 };
+  permanentUpgrades = { permTempoBoost: 0, permValueBoost: 0, permXPBoost: 0, permPotionBelt: 0, permAutoClicker: 0, permAutoClickerSpeed1: 0, permAutoClickerSpeed2: 0 };
   statUpgradesLevels = { wealth: 0, luck: 0, tempo: 0 };
   purchasedItems = new Set();
+  
+  // Auto-Clicker stoppen und Reset
+  autoClickerCanRun = false;
+  autoClickerEnabled = false;
+  saveAutoClickerState();
+  stopAutoClicker();
 
   // Boxen/Inventar
   unlockedBoxes.clear();
@@ -4292,10 +4526,7 @@ function proceedAfterPrestige() {
   try {
     renderKeysButtonBadges();
     setKeysBtnNotify(false);
-    if (__keysModal && __keysModal.style.display === 'block') {
-      // Modal-Inhalt mit neuem Bestand neu aufbauen
-      showKeysModal();
-    }
+    // Keys modal removed
   } catch (_) { /* ignore */ }
 
   // Items/Entdeckungen: zurücksetzen
@@ -4329,7 +4560,14 @@ function proceedAfterPrestige() {
 }
 
 if (dom.confirmPrestigeBtn) {
-  dom.confirmPrestigeBtn.addEventListener('click', () => doPrestige());
+  dom.confirmPrestigeBtn.addEventListener('click', () => {
+    // Blockiere Button während Box-Öffnung
+    if (isOpening) {
+      alert('Bitte warte, bis die Box-Öffnung abgeschlossen ist.');
+      return;
+    }
+    doPrestige();
+  });
 }
 
 // Initial Prestige-UI Sync
@@ -4360,264 +4598,6 @@ document.addEventListener('click', async (e) => {
     }
   }
 });
-
-// ======= Leaderboard (Firebase) =======
-(function initLeaderboard() {
-  try {
-    const lbBtn = document.getElementById('leaderboardBtn');
-    const lbModal = document.getElementById('leaderboardModal');
-    const lbClose = document.getElementById('closeLeaderboardBtn');
-    const lbContent = document.getElementById('leaderboardContent');
-
-    function renderTabs(active) {
-      const html = `
-        <div class="lb-tabs">
-          <button class="lb-tab ${active==='global'?'active':''}" data-tab="global">Global</button>
-          <button class="lb-tab ${active==='friends'?'active':''}" data-tab="friends">Freunde</button>
-          <button id="lbRefreshBtn" title="Aktualisieren" style="margin-left:auto;">🔄 Aktualisieren</button>
-        </div>
-        <div id="lbProfile" style="margin:10px 0; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <span style="opacity:.85">Dein Name:</span>
-          <input id="lbNameInput" type="text" maxlength="24" placeholder="z.B. Anon-1234" style="flex:1;min-width:180px;" />
-          <button id="saveLbNameBtn">Speichern</button>
-          <span style="opacity:.85">UID:</span>
-          <code id="lbUid">—</code>
-          <button id="copyUidBtn" title="UID in Zwischenablage kopieren">Kopieren</button>
-        </div>
-        <div id="lbView"></div>
-        <div id="lbFriendsTools" style="display:${active==='friends'?'block':'none'};margin-top:10px;">
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <input id="friendUidInput" type="text" placeholder="Freund UID hinzufügen" style="flex:1;min-width:240px;" />
-            <button id="addFriendBtn">Hinzufügen</button>
-          </div>
-          <div id="friendsList" style="margin-top:8px;"></div>
-        </div>`;
-      lbContent.innerHTML = html;
-      attachProfileTools();
-      // Refresh-Button: lädt die aktuell aktive Ansicht neu
-      const refreshBtn = lbContent.querySelector('#lbRefreshBtn');
-      if (refreshBtn) {
-        const doRefresh = async () => {
-          try {
-            refreshBtn.disabled = true;
-            refreshBtn.textContent = 'Lädt…';
-            const activeEl = lbContent.querySelector('.lb-tab.active');
-            const cur = activeEl ? activeEl.dataset.tab : 'global';
-            if (cur === 'global') {
-              await renderGlobal();
-            } else {
-              // Freunde-Ansicht: Liste und Rangliste aktualisieren
-              await renderFriends();
-              try { await attachFriendsTools(); } catch (_) {}
-            }
-          } finally {
-            refreshBtn.disabled = false;
-            refreshBtn.textContent = '🔄 Aktualisieren';
-          }
-        };
-        refreshBtn.addEventListener('click', doRefresh);
-      }
-      Array.from(lbContent.querySelectorAll('.lb-tab')).forEach(btn => {
-        btn.addEventListener('click', () => {
-          renderTabs(btn.dataset.tab);
-          const isGlobal = btn.dataset.tab === 'global';
-          if (isGlobal) renderGlobal(); else renderFriends();
-          // Mobile: nach dem Rendern zum Leaderboard-Bereich scrollen
-          try {
-            if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
-              setTimeout(() => {
-                const target = document.getElementById('lbView') || document.getElementById('leaderboardContent');
-                if (target && typeof target.getBoundingClientRect === 'function') {
-                  const rect = target.getBoundingClientRect();
-                  const y = (window.scrollY || window.pageYOffset || 0) + rect.top - 16;
-                  window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
-                }
-              }, 60);
-            }
-          } catch (_) {}
-        });
-      });
-      if (active === 'friends') attachFriendsTools();
-    }
-
-    async function renderGlobal() {
-      const view = document.getElementById('lbView'); if (!view) return;
-      view.innerHTML = '<p>Laden…</p>';
-      try {
-        if (window.firebaseApi && typeof window.firebaseApi.ready === 'function') await window.firebaseApi.ready();
-        const rows = (window.firebaseApi && typeof window.firebaseApi.fetchGlobalLeaderboard === 'function') ? await window.firebaseApi.fetchGlobalLeaderboard(50) : [];
-        view.innerHTML = renderRowsOrEmpty(rows);
-      } catch (e) { view.innerHTML = '<p>Fehler beim Laden.</p>'; console.warn(e); }
-    }
-
-    function renderRowsOrEmpty(rows) {
-      if (!rows || rows.length === 0) return '<p>Keine Einträge (oder nicht verbunden).</p>';
-      const ol = document.createElement('ol');
-      ol.style.textAlign = 'left';
-      rows.forEach(r => {
-        const li = document.createElement('li');
-        li.textContent = `${r.displayName || 'Anon'} — Prestige ${r.prestigeLevel || 0}`;
-        ol.appendChild(li);
-      });
-      const wrap = document.createElement('div');
-      wrap.appendChild(ol);
-      return wrap.innerHTML;
-    }
-
-    async function attachFriendsTools() {
-      const input = document.getElementById('friendUidInput');
-      const addBtn = document.getElementById('addFriendBtn');
-      const list = document.getElementById('friendsList');
-      async function refreshList() {
-        if (!list) return;
-        list.innerHTML = 'Lade Freunde…';
-        try {
-          if (window.firebaseApi && typeof window.firebaseApi.ready === 'function') await window.firebaseApi.ready();
-          const ids = (window.firebaseApi && typeof window.firebaseApi.fetchFriendsUids === 'function') ? await window.firebaseApi.fetchFriendsUids() : [];
-          if (!ids || ids.length === 0) { list.textContent = 'Keine Freunde hinzugefügt.'; return; }
-          const container = document.createElement('div');
-          ids.forEach(id => {
-            const row = document.createElement('div');
-            row.style.display = 'flex'; row.style.gap = '8px'; row.style.alignItems = 'center'; row.style.margin = '4px 0';
-            const code = document.createElement('code'); code.textContent = id; code.style.flex = '1';
-            const rm = document.createElement('button'); rm.textContent = 'Entfernen';
-            rm.addEventListener('click', async () => { try { await window.firebaseApi.removeFriend(id); refreshList(); renderFriends(); } catch(_){} });
-            row.appendChild(code); row.appendChild(rm); container.appendChild(row);
-          });
-          list.innerHTML = ''; list.appendChild(container);
-        } catch (e) { list.textContent = 'Fehler beim Laden.'; }
-      }
-      if (addBtn && input) {
-        addBtn.addEventListener('click', async () => {
-          const v = (input.value || '').trim(); if (!v) return;
-          try { await window.firebaseApi.addFriend(v); input.value=''; refreshList(); renderFriends(); } catch(_){}
-        });
-      }
-      refreshList();
-    }
-
-    async function renderFriends() {
-      const view = document.getElementById('lbView'); if (!view) return;
-      view.innerHTML = '<p>Laden…</p>';
-      try {
-        if (window.firebaseApi && typeof window.firebaseApi.ready === 'function') await window.firebaseApi.ready();
-        const rows = (window.firebaseApi && typeof window.firebaseApi.fetchFriendsLeaderboard === 'function') ? await window.firebaseApi.fetchFriendsLeaderboard(50) : [];
-        view.innerHTML = renderRowsOrEmpty(rows);
-      } catch (e) { view.innerHTML = '<p>Fehler beim Laden.</p>'; console.warn(e); }
-    }
-
-    function attachProfileTools() {
-      try {
-        const nameInput = document.getElementById('lbNameInput');
-        const saveBtn = document.getElementById('saveLbNameBtn');
-        const uidEl = document.getElementById('lbUid');
-        const copyBtn = document.getElementById('copyUidBtn');
-
-        // Prefill name from localStorage (same key used by firebase.js)
-        try {
-          const stored = localStorage.getItem('lootsim_playerDisplayName');
-          if (stored && nameInput) nameInput.value = stored;
-        } catch (_) {}
-
-        // Fill UID
-        try {
-          if (window.firebaseApi && typeof window.firebaseApi.getCurrentUid === 'function') {
-            const uid = window.firebaseApi.getCurrentUid();
-            if (uid && uidEl) uidEl.textContent = uid;
-          }
-        } catch (_) {}
-
-        if (copyBtn) {
-          copyBtn.addEventListener('click', async () => {
-            try {
-              const txt = uidEl && uidEl.textContent ? uidEl.textContent : '';
-              if (txt) await navigator.clipboard.writeText(txt);
-              copyBtn.textContent = 'Kopiert!';
-              setTimeout(() => { copyBtn.textContent = 'Kopieren'; }, 1200);
-            } catch (_) {}
-          });
-        }
-
-        if (saveBtn && nameInput) {
-          const doSave = async () => {
-            try {
-              let v = (nameInput.value || '').trim();
-              // Sanitize: allow letters (incl. diacritics), digits, space, underscore, dash
-              try { v = v.replace(/[^\p{L}\p{N} _-]/gu, ''); } catch (_) { v = v.replace(/[^A-Za-z0-9 _-]/g, ''); }
-              if (v.length < 3) v = v.padEnd(3, '_');
-              if (v.length > 24) v = v.slice(0, 24);
-
-              // Prefer server-side callable to set name fairly
-              let storedName = v;
-              let usedCallable = false;
-              try {
-                if (window.firebaseApi && typeof window.firebaseApi.setDisplayName === 'function') {
-                  usedCallable = true;
-                  const res = await window.firebaseApi.setDisplayName(v);
-                  if (res && res.displayName) storedName = String(res.displayName);
-                }
-              } catch (e) {
-                // Will fallback to client-side storage + stats update
-              }
-
-              try { localStorage.setItem('lootsim_playerDisplayName', storedName); } catch (_) {}
-
-              if (!usedCallable) {
-                // Fallback: write a stats update with displayName so name propagates (non-authoritative)
-                if (window.firebaseApi && typeof window.firebaseApi.updateStats === 'function') {
-                  window.firebaseApi.updateStats({ displayName: storedName });
-                }
-              }
-
-              saveBtn.textContent = 'Gespeichert ✓';
-              setTimeout(() => { saveBtn.textContent = 'Speichern'; }, 1200);
-            } catch (_) {}
-          };
-          saveBtn.addEventListener('click', doSave);
-          nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSave(); });
-        }
-      } catch (_) {}
-    }
-
-    if (lbBtn) lbBtn.addEventListener('click', () => {
-      if (!lbModal) return;
-      lbModal.style.display = 'block';
-      renderTabs('global');
-      renderGlobal();
-      // Mobile: beim Öffnen direkt zum Leaderboard-Bereich scrollen
-      try {
-        if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
-          setTimeout(() => {
-            const target = document.getElementById('lbView') || document.getElementById('leaderboardContent');
-            if (target && typeof target.getBoundingClientRect === 'function') {
-              const rect = target.getBoundingClientRect();
-              const y = (window.scrollY || window.pageYOffset || 0) + rect.top - 16;
-              window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
-            }
-          }, 60);
-        }
-      } catch (_) {}
-    });
-    if (lbClose) lbClose.addEventListener('click', () => { if (lbModal) lbModal.style.display = 'none'; });
-    if (lbModal) lbModal.addEventListener('click', (e) => { if (e.target === lbModal) lbModal.style.display = 'none'; });
-
-    // Initial write to ensure user exists and stats are visible
-    try {
-      const payload = {
-        prestigeLevel: (prestigeState && Number.isFinite(prestigeState.level)) ? prestigeState.level : 0,
-        totalXP: Number(playerXP || 0),
-        totalBoxesOpened: Number((stats && stats.totalBoxesOpened) || 0),
-      };
-      if (window.firebaseApi && typeof window.firebaseApi.ready === 'function') {
-        window.firebaseApi.ready().then(() => {
-          if (window.firebaseApi && typeof window.firebaseApi.updateStats === 'function') {
-            window.firebaseApi.updateStats(payload);
-          }
-        });
-      }
-    } catch (_) { /* ignore */ }
-  } catch (_) { /* ignore */ }
-})();
 
 // ======= App-Version laden und anzeigen + Update-Checker =======
 (function setupVersioning() {
@@ -4677,6 +4657,12 @@ document.addEventListener('click', async (e) => {
       currentVersion = ver;
       try { window.__appVersion = ver; } catch (_) {}
       setVersionBadge(ver);
+      
+      // Sofort prüfen ob Update nötig (bei Seitenladung)
+      if (APP_VERSION && ver !== APP_VERSION) {
+        console.log(`Version mismatch: Client=${APP_VERSION}, Server=${ver}`);
+        ensureUpdateBanner(ver);
+      }
     }
     // Poll auf neue Version
     setInterval(async () => {
@@ -4792,4 +4778,249 @@ document.addEventListener('click', async (e) => {
   });
 })();
 
+// ======= Auto-Clicker System =======
+let autoClickerInterval = null;
+let autoClickerLastOpen = 0; // Zeitstempel der letzten Öffnung
+
+function startAutoClicker() {
+  if (autoClickerInterval) return; // Bereits aktiv
+  if (!autoClickerEnabled) return; // User hat deaktiviert
+  
+  autoClickerInterval = setInterval(() => {
+    const hasAutoClicker = (permanentUpgrades.permAutoClicker || 0) >= 1;
+    if (!hasAutoClicker || !autoClickerEnabled || !autoClickerCanRun) {
+      // Stoppe nicht sofort, nur pausieren wenn canRun false
+      if (!hasAutoClicker || !autoClickerEnabled) {
+        stopAutoClicker();
+      }
+      return;
+    }
+    
+    // Prüfe ob genug Zeit seit letzter Öffnung vergangen ist (abhängig von Speed-Upgrade)
+    const now = Date.now();
+    const requiredDelay = autoClickerSpeed * 1000; // 3s, 2s oder 1s
+    const elapsed = now - autoClickerLastOpen;
+    if (elapsed < requiredDelay) {
+      return; // Noch in Wartezeit
+    }
+    
+    // Nur öffnen wenn nicht bereits eine Öffnung läuft
+    if (!isOpening && dom.openBtn && !dom.openBtn.disabled) {
+      // Prüfe ob Ressourcen vorhanden sind (Geld oder Schlüssel)
+      const isKR = isKeyRoom(boxType);
+      
+      // Wenn im Key-Mode: Prüfe Schlüssel, sonst Geld
+      if (isKR) {
+        // Extrahiere Rarität aus KeyRoom_XXX
+        const rarity = boxType.replace('KeyRoom_', '');
+        const hasKey = rarity && keysInventory[rarity] > 0;
+        
+        if (hasKey) {
+          dom.openBtn.click();
+        } else {
+          // Keine Schlüssel mehr -> Auto-Clicker pausieren
+          autoClickerCanRun = false;
+          return;
+        }
+      } else {
+        const cost = boxConfigs[boxType]?.cost || 0;
+        if (balance >= cost) {
+          dom.openBtn.click();
+        } else {
+          // Kein Geld mehr -> Auto-Clicker pausieren und auf manuellen Input warten
+          autoClickerCanRun = false;
+          return;
+        }
+      }
+    }
+  }, 500); // Prüfe alle 500ms (reagiert schneller, aber öffnet nur nach 3s Pause)
+}
+
+function stopAutoClicker() {
+  if (autoClickerInterval) {
+    clearInterval(autoClickerInterval);
+    autoClickerInterval = null;
+  }
+}
+
+function toggleAutoClicker() {
+  const hasSpeed1 = (permanentUpgrades.permAutoClickerSpeed1 || 0) >= 1;
+  const hasSpeed2 = (permanentUpgrades.permAutoClickerSpeed2 || 0) >= 1;
+  
+  // Cycle: AUS -> 3s -> 2s (if owned) -> 1s (if owned) -> AUS
+  if (!autoClickerEnabled) {
+    // AUS -> 3s AN
+    autoClickerEnabled = true;
+    autoClickerSpeed = 3;
+  } else if (autoClickerEnabled && autoClickerSpeed === 3) {
+    // Von 3s weiter
+    if (hasSpeed1) {
+      autoClickerSpeed = 2; // 3s -> 2s
+    } else {
+      // Keine weiteren Upgrades -> zurück zu AUS
+      autoClickerEnabled = false;
+      autoClickerSpeed = 3;
+      autoClickerCanRun = false;
+    }
+  } else if (autoClickerEnabled && autoClickerSpeed === 2) {
+    // Von 2s weiter
+    if (hasSpeed2) {
+      autoClickerSpeed = 1; // 2s -> 1s
+    } else {
+      // Kein Speed2 -> zurück zu AUS
+      autoClickerEnabled = false;
+      autoClickerSpeed = 3;
+      autoClickerCanRun = false;
+    }
+  } else if (autoClickerEnabled && autoClickerSpeed === 1) {
+    // Von 1s -> AUS
+    autoClickerEnabled = false;
+    autoClickerSpeed = 3;
+    autoClickerCanRun = false;
+  }
+  
+  saveAutoClickerState();
+  updateAutoClickerUI();
+  
+  // Kurz "BEREIT" anzeigen wenn aktiviert
+  if (autoClickerEnabled) {
+    const statusSpan = document.getElementById('autoClickerStatus');
+    if (statusSpan) {
+      statusSpan.textContent = 'BEREIT';
+      setTimeout(() => {
+        if (autoClickerEnabled) {
+          statusSpan.textContent = `${autoClickerSpeed}s`;
+        }
+      }, 800);
+    }
+    // Erlaubt sofortiges Öffnen nach manueller Aktivierung (wenn delay erfüllt)
+    if (autoClickerCanRun) {
+      autoClickerLastOpen = Date.now() - (autoClickerSpeed * 1000);
+    }
+    checkAutoClicker(); // Intervall starten
+  } else {
+    stopAutoClicker();
+  }
+}
+
+function updateAutoClickerUI() {
+  const toggleBtn = document.getElementById('autoClickerToggle');
+  const statusSpan = document.getElementById('autoClickerStatus');
+  const hasAutoClicker = (permanentUpgrades.permAutoClicker || 0) >= 1;
+  
+  if (!toggleBtn) return;
+  
+  // Toggle class on open button for cut-off style
+  if (dom.openBtn) {
+    if (hasAutoClicker) {
+      dom.openBtn.classList.add('has-autoclicker');
+    } else {
+      dom.openBtn.classList.remove('has-autoclicker');
+    }
+  }
+  
+  // Button nur anzeigen wenn Upgrade gekauft
+  if (hasAutoClicker) {
+    toggleBtn.style.display = '';
+    if (statusSpan) {
+      statusSpan.textContent = autoClickerEnabled ? `${autoClickerSpeed}s` : 'AUS';
+    }
+    // Dynamische Farben: Matching gradient (AN) / Gedimmt (AUS)
+    if (autoClickerEnabled) {
+      toggleBtn.style.background = 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)';
+      toggleBtn.style.borderColor = '#27ae60';
+      toggleBtn.style.boxShadow = '0 4px 15px rgba(46, 204, 113, 0.4), inset 0 -3px 10px rgba(0,0,0,0.2)';
+      toggleBtn.style.opacity = '1';
+    } else {
+      toggleBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+      toggleBtn.style.borderColor = '#9f7aea';
+      toggleBtn.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4), inset 0 -3px 10px rgba(0,0,0,0.2)';
+      toggleBtn.style.opacity = '0.7';
+    }
+  } else {
+    toggleBtn.style.display = 'none';
+  }
+}
+
+function saveAutoClickerState() {
+  try {
+    localStorage.setItem('autoClickerEnabled', JSON.stringify(autoClickerEnabled));
+    localStorage.setItem('autoClickerSpeed', JSON.stringify(autoClickerSpeed));
+  } catch (e) {
+    console.warn('Failed to save auto-clicker state', e);
+  }
+}
+
+function loadAutoClickerState() {
+  try {
+    const savedEnabled = localStorage.getItem('autoClickerEnabled');
+    if (savedEnabled !== null) {
+      autoClickerEnabled = JSON.parse(savedEnabled);
+    }
+    const savedSpeed = localStorage.getItem('autoClickerSpeed');
+    if (savedSpeed !== null) {
+      autoClickerSpeed = JSON.parse(savedSpeed);
+    }
+  } catch (e) {
+    console.warn('Failed to load auto-clicker state', e);
+  }
+}
+
+// Auto-Clicker starten wenn Upgrade gekauft
+function checkAutoClicker() {
+  const hasAutoClicker = (permanentUpgrades.permAutoClicker || 0) >= 1;
+  updateAutoClickerUI();
+  
+  if (hasAutoClicker && autoClickerEnabled) {
+    startAutoClicker();
+  } else {
+    stopAutoClicker();
+  }
+}
+
+// Toggle-Button Event Listener
+setTimeout(() => {
+  const toggleBtn = document.getElementById('autoClickerToggle');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', toggleAutoClicker);
+  }
+}, 100);
+
+// Load state und initial check nach Laden
+loadAutoClickerState();
+setTimeout(checkAutoClicker, 1000);
+
+// Force sync before page unload
+window.addEventListener('beforeunload', () => {
+  // Force immediate sync (ignore cooldown)
+  lastFirebaseSync = 0;
+  clearTimeout(saveProgressTimeout);
+  
+  try {
+    const progress = {
+      balance,
+      playerLevel,
+      playerXP,
+      totalXPEarned,
+      skillPoints,
+      skills: { ...skills },
+      boxType,
+      unlockedBoxes: Array.from(unlockedBoxes),
+      stats: { ...stats },
+      achievementsState: { ...achievementsState },
+      activeBoosts: { ...activeBoosts },
+      permanentUpgrades: { ...permanentUpgrades },
+      purchasedItems: Array.from(purchasedItems),
+      statUpgradesLevels: { ...statUpgradesLevels },
+      keysInventory: { ...keysInventory },
+      prestigeState: { ...prestigeState }
+    };
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+    syncToFirebase(progress);
+  } catch (e) {
+    console.warn('Failed to save on unload', e);
+  }
+});
+
 // (Export/Import entfernt)
+
