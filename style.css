@@ -371,26 +371,28 @@ h1 {
 
 .container-grid {
   display: grid;
-  border: 0.5px solid #888;
+  gap: 2px;
+  background-color: #444;
+  padding: 2px;
 }
 
 .slot {
   position: relative;
-  width: 100%; /* füllt die Grid-Zelle, Größe wird per JS über gridTemplate gesetzt */
+  width: 100%;
   height: 100%;
   background-color: #222;
-  border: 1px solid #555;
+  border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2050; /* Basisebene für Slots - sollte über dem Overlay liegen */
+  z-index: 2050;
   transition: opacity 0.2s ease, transform 0.2s ease;
+  box-sizing: border-box;
 }
 
 .item {
-  width: 90%;
-  height: 90%;
-  /* Default: kein spezieller Hintergrund hier - Vorabzustand wird per Klasse gesteuert */
+  width: calc(100% - 6px);
+  height: calc(100% - 6px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -398,7 +400,9 @@ h1 {
   cursor: pointer;
   transition: background-color 0.3s ease;
   position: relative;
-  z-index: 2051; /* Items liegen über Slots */
+  z-index: 2051;
+  box-sizing: border-box;
+  margin: 3px;
 }
 
 /* Vorabzustand: gestreiftes Feld (wie das große Overlay) für die Slots,
@@ -412,13 +416,11 @@ h1 {
     #444 10px,
     #444 20px
   );
-  border: 2px solid #888;
 }
 
 .item.revealed {
   font-weight: bold;
   color: black;
-  border: 2px solid black;
 }
 
 .lupe {
@@ -667,10 +669,10 @@ h1 {
 
 /* Loot-Grid Icons (icons shown while revealing) */
 #lootContainer .item img {
-  width: 70%;
-  height: 70%;
-  max-width: 72px;
-  max-height: 72px;
+  width: 95%;
+  height: 95%;
+  max-width: none;
+  max-height: none;
   object-fit: contain;
 }
 
