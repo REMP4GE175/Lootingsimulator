@@ -221,19 +221,19 @@ const shopItems = {
   },
   tempRarityBoost: {
     name: "Vierblättriges Kleeblatt",
-    description: "Nächste 3 Öffnungen: Erhöhte Rare+ Chancen",
+    description: "Nächste 5 Öffnungen: Erhöhte Rare+ Chancen",
     icon: "🌿",
-    cost: 8000,
+    cost: 5000,
     type: "temp",
-    effect: { type: "rarityBoost", value: 0.15, uses: 3 }
+    effect: { type: "rarityBoost", value: 0.15, uses: 5 }
   },
   tempXPBoost: {
     name: "Wissenselixier",
-    description: "Nächste 10 Öffnungen: +100% XP",
+    description: "Nächste 5 Öffnungen: +100% XP",
     icon: "📚",
-    cost: 3000,
+    cost: 5000,
     type: "temp",
-    effect: { type: "xpBoost", value: 1.0, uses: 10 }
+    effect: { type: "xpBoost", value: 1.0, uses: 5 }
   },
   
   // Permanente Upgrades
@@ -787,8 +787,8 @@ const boxConfigs = {
   },
   "KeyRoom_Legendary": {
     cost: 0,
-    columns: 4,
-    rows: 3,
+    columns: 5,
+    rows: 4,
     weights: {
       Common: 10,
       Rare: 30,
@@ -2682,9 +2682,7 @@ dom.openBtn.addEventListener('click', async () => {
       }
     }
     
-    if (!placed) {
-      console.warn(`Kein Platz für Item ${pulledItem.name} (${itemWidth}x${itemHeight})`);
-    }
+    // Kein Platz gefunden - Item wird verworfen (still)
   }
 
   // Verwende placedItems statt slots
