@@ -1,6 +1,6 @@
 // ======= Zustandsvariablen =======
 // App Version (für Update-Check)
-const APP_VERSION = '0.72';
+const APP_VERSION = '0.73';
 
 // Items, die der Spieler bereits entdeckt hat
 const discoveredItems = new Set();
@@ -356,6 +356,69 @@ let permanentUpgrades = {
   permAutoClicker: 0,
   permAutoClickerSpeed1: 0,
   permAutoClickerSpeed2: 0
+};
+
+// Background-System
+let unlockedBackgrounds = new Set(['default']); // Freigeschaltete Hintergründe
+let activeBackground = 'default'; // Aktuell aktiver Hintergrund
+
+// Hintergrund-Definitionen
+const backgrounds = {
+  default: {
+    name: 'Standard',
+    description: 'Der klassische Hintergrund',
+    unlocked: true,
+    type: 'image',
+    value: 'Backgroundbilder/Abandoned Building.png',
+    fallbackColor: '#134e5e'
+  },
+  // Gradient Hintergründe
+  ocean: {
+    name: 'Ozean',
+    description: 'Tiefblaue Meerestiefen',
+    unlockCondition: 'prestige1',
+    type: 'image',
+    value: 'Backgroundbilder/Ocean.png',
+    fallbackColor: '#134e5e'
+  },
+  forest: {
+    name: 'Wald',
+    description: 'Waldlichtung',
+    unlockCondition: 'prestige10',
+    type: 'image',
+    value: 'Backgroundbilder/Wald.png',
+    fallbackColor: '#134e5e'
+  },
+  aurora: {
+    name: 'Nordlicht',
+    description: 'Schillernde Polarlichter',
+    unlockCondition: 'prestige20',
+    type: 'image',
+    value: 'Backgroundbilder/Nordlicht.png',
+    fallbackColor: '#134e5e'
+  },
+  volcano: {
+    name: 'Vulkan',
+    description: 'Glühende Lava',
+    unlockCondition: 'prestige30',
+    type: 'image',
+    value: 'Backgroundbilder/Vulkan.png',
+    fallbackColor: '#134e5e'
+  },
+  galaxy: {
+    name: 'Galaxie',
+    description: 'Sternenwirbel',
+    unlockCondition: 'mythic100',
+    type: 'gradient',
+    value: 'linear-gradient(135deg, #360033 0%, #0b8793 100%)'
+  },
+  aether: {
+    name: 'Äther',
+    description: 'Ätherische Dimensionen',
+    unlockCondition: 'aetheric10',
+    type: 'gradient',
+    value: 'linear-gradient(135deg, #8e2de2 0%, #4a00e0 100%)'
+  }
 };
 
 // Auto-Clicker Toggle State (unabhängig vom Upgrade)
@@ -2099,7 +2162,9 @@ function saveProgress() {
       purchasedItems: Array.from(purchasedItems),
       statUpgradesLevels: { ...statUpgradesLevels },
       keysInventory: { ...keysInventory },
-      prestigeState: { ...prestigeState }
+      prestigeState: { ...prestigeState },
+      unlockedBackgrounds: Array.from(unlockedBackgrounds),
+      activeBackground
     };
     localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
     
@@ -2279,6 +2344,14 @@ function loadProgress() {
       if ((prestigeState.runBoxesOpened || 0) === 0 && (progress.stats?.totalBoxesOpened || 0) > 0) {
         prestigeState.runBoxesOpened = progress.stats.totalBoxesOpened;
       }
+    }
+    // Hintergründe laden
+    if (progress.unlockedBackgrounds && Array.isArray(progress.unlockedBackgrounds)) {
+      unlockedBackgrounds = new Set(progress.unlockedBackgrounds);
+    }
+    if (progress.activeBackground && backgrounds[progress.activeBackground]) {
+      activeBackground = progress.activeBackground;
+      applyBackground(activeBackground);
     }
   } catch (e) {
     console.warn('Failed to load progress', e);
@@ -3854,6 +3927,16 @@ function resetProgress() {
 function showCollection() {
   const grid = dom.collectionGrid;
   grid.innerHTML = '';
+  
+  // Deutsche Übersetzungen für Raritäten
+  const rarityNames = {
+    'Common': 'Gewöhnlich',
+    'Rare': 'Selten',
+    'Epic': 'Episch',
+    'Legendary': 'Legendär',
+    'Mythisch': 'Mythisch',
+    'Aetherisch': 'Ätherisch'
+  };
 
   for (const rarity of rarities) {
     // Abschnitt für jede Rarität
@@ -3865,7 +3948,7 @@ function showCollection() {
     const discoveredCount = (itemPools[rarity] || []).filter(item => discoveredItems.has(item.name)).length;
 
     const sectionTitle = document.createElement('h2');
-    sectionTitle.textContent = `${rarity} (${discoveredCount}/${totalItems})`;
+    sectionTitle.textContent = `${rarityNames[rarity] || rarity} (${discoveredCount}/${totalItems})`;
     sectionTitle.style.color = colors[rarity] || '#fff';
     section.appendChild(sectionTitle);
 
@@ -4209,6 +4292,12 @@ function closeAchievements() {
 dom.statsBtn.addEventListener('click', showStats);
 dom.closeStatsBtn.addEventListener('click', closeStats);
 
+// ======= Background-Selector =======
+const backgroundBtn = document.getElementById('backgroundBtn');
+if (backgroundBtn) {
+  backgroundBtn.addEventListener('click', openBackgroundSelector);
+}
+
 // ======= Leaderboard =======
 if (dom.leaderboardBtn) {
   dom.leaderboardBtn.addEventListener('click', showLeaderboard);
@@ -4221,7 +4310,15 @@ if (dom.saveNameBtn) {
 }
 
 async function showLeaderboard() {
-  dom.leaderboardModal.style.display = 'flex';
+  const leaderboardDisplay = document.getElementById('leaderboardDisplay');
+  
+  // Toggle visibility
+  if (leaderboardDisplay.style.display === 'block') {
+    leaderboardDisplay.style.display = 'none';
+    return;
+  }
+  
+  leaderboardDisplay.style.display = 'block';
   
   // Lade gespeicherten Namen
   const savedName = localStorage.getItem('playerDisplayName') || '';
@@ -4281,7 +4378,10 @@ async function showLeaderboard() {
 }
 
 function closeLeaderboard() {
-  dom.leaderboardModal.style.display = 'none';
+  const leaderboardDisplay = document.getElementById('leaderboardDisplay');
+  if (leaderboardDisplay) {
+    leaderboardDisplay.style.display = 'none';
+  }
 }
 
 async function saveDisplayName() {
@@ -5237,6 +5337,252 @@ setTimeout(() => {
 // Load state und initial check nach Laden
 loadAutoClickerState();
 setTimeout(checkAutoClicker, 1000);
+
+// ======= Background-System =======
+function applyBackground(bgKey) {
+  const bg = backgrounds[bgKey];
+  
+  if (bgKey === 'custom') {
+    // Custom Color
+    const customColor = localStorage.getItem('customBackgroundColor') || '#1a1a1a';
+    document.body.style.background = customColor;
+    activeBackground = 'custom';
+    localStorage.setItem('activeBackground', 'custom');
+    return;
+  }
+  
+  if (!bg) return;
+  
+  if (bg.type === 'image') {
+    // Bild als Hintergrund - cover stellt sicher, dass das Bild immer den gesamten Bereich abdeckt
+    document.body.style.background = `url('${bg.value}') center/cover no-repeat fixed`;
+    document.body.style.backgroundColor = bg.fallbackColor || '#1a1a2e';
+  } else if (bg.type === 'solid') {
+    // Einfarbiger Hintergrund
+    document.body.style.background = bg.value;
+  } else {
+    // Gradient als Hintergrund
+    document.body.style.background = bg.value;
+  }
+  
+  activeBackground = bgKey;
+  localStorage.setItem('activeBackground', bgKey);
+}
+
+function checkBackgroundUnlocks() {
+  const prestige = prestigeState.level || 0;
+  const mythicCount = getDiscoveredCountByRarity('Mythisch') || 0;
+  const aethericCount = getDiscoveredCountByRarity('Aetherisch') || 0;
+  
+  for (const [key, bg] of Object.entries(backgrounds)) {
+    if (bg.unlocked || unlockedBackgrounds.has(key)) {
+      unlockedBackgrounds.add(key);
+      continue;
+    }
+    
+    // Prüfe Unlock-Bedingungen
+    let unlocked = false;
+    if (bg.unlockCondition) {
+      if (bg.unlockCondition.startsWith('prestige')) {
+        const required = parseInt(bg.unlockCondition.replace('prestige', ''));
+        unlocked = prestige >= required;
+      } else if (bg.unlockCondition.startsWith('mythic')) {
+        const required = parseInt(bg.unlockCondition.replace('mythic', ''));
+        unlocked = mythicCount >= required;
+      } else if (bg.unlockCondition.startsWith('aetheric')) {
+        const required = parseInt(bg.unlockCondition.replace('aetheric', ''));
+        unlocked = aethericCount >= required;
+      }
+    }
+    
+    if (unlocked && !unlockedBackgrounds.has(key)) {
+      unlockedBackgrounds.add(key);
+      // Optional: Notification anzeigen
+      console.log(`🎨 Neuer Hintergrund freigeschaltet: ${bg.name}`);
+    }
+  }
+}
+
+function openBackgroundSelector() {
+  checkBackgroundUnlocks(); // Prüfe Unlocks
+  
+  let modal = document.getElementById('backgroundModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'backgroundModal';
+    modal.className = 'info-modal';
+    modal.innerHTML = `
+      <div class="info-content">
+        <button class="info-close" aria-label="Schließen">✖</button>
+        <h3>🎨 Hintergrund wählen</h3>
+        <div id="backgroundGrid"></div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    
+    modal.querySelector('.info-close').addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+    
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.style.display = 'none';
+    });
+  }
+  
+  // Erstelle Grid
+  const grid = modal.querySelector('#backgroundGrid');
+  grid.innerHTML = '';
+  grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; margin-top: 15px;';
+  
+  // Custom Color Picker Card hinzufügen
+  const customCard = document.createElement('div');
+  const currentCustomColor = localStorage.getItem('customBackgroundColor') || '#1a1a1a';
+  const isCustomActive = activeBackground === 'custom';
+  
+  customCard.style.cssText = `
+    background: ${currentCustomColor};
+    border: 3px solid ${isCustomActive ? '#ffd700' : '#444'};
+    border-radius: 10px;
+    padding: 15px;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  `;
+  
+  customCard.innerHTML = `
+    <div style="background: rgba(0,0,0,0.7); padding: 8px; border-radius: 5px;">
+      <div style="font-weight: bold; margin-bottom: 3px;">Eigene Farbe${isCustomActive ? ' ✓' : ''}</div>
+      <div style="font-size: 0.85em; opacity: 0.9;">Wähle deine Farbe</div>
+      <input type="color" id="customColorPicker" value="${currentCustomColor}" 
+             style="width: 100%; height: 30px; margin-top: 8px; cursor: pointer; border: 2px solid #666; border-radius: 5px;">
+    </div>
+  `;
+  
+  customCard.addEventListener('mouseenter', () => {
+    if (!isCustomActive) customCard.style.border = '3px solid #888';
+  });
+  
+  customCard.addEventListener('mouseleave', () => {
+    if (!isCustomActive) customCard.style.border = '3px solid #444';
+  });
+  
+  const colorPicker = customCard.querySelector('#customColorPicker');
+  colorPicker.addEventListener('click', (e) => {
+    e.stopPropagation(); // Verhindert Card-Click
+  });
+  
+  colorPicker.addEventListener('input', (e) => {
+    const color = e.target.value;
+    customCard.style.background = color;
+    localStorage.setItem('customBackgroundColor', color);
+  });
+  
+  colorPicker.addEventListener('change', (e) => {
+    const color = e.target.value;
+    document.body.style.background = color;
+    activeBackground = 'custom';
+    localStorage.setItem('activeBackground', 'custom');
+    localStorage.setItem('customBackgroundColor', color);
+    openBackgroundSelector(); // Refresh
+  });
+  
+  customCard.addEventListener('click', (e) => {
+    if (e.target !== colorPicker) {
+      document.body.style.background = currentCustomColor;
+      activeBackground = 'custom';
+      localStorage.setItem('activeBackground', 'custom');
+      openBackgroundSelector(); // Refresh
+    }
+  });
+  
+  grid.appendChild(customCard);
+  
+  for (const [key, bg] of Object.entries(backgrounds)) {
+    const isUnlocked = bg.unlocked || unlockedBackgrounds.has(key);
+    const isActive = activeBackground === key;
+    
+    const card = document.createElement('div');
+    const cardBackground = bg.type === 'image' 
+      ? `${bg.fallbackColor || '#1a1a1a'} url('${bg.value}') center/cover no-repeat`
+      : bg.value;
+    
+    card.style.cssText = `
+      background: ${cardBackground};
+      border: 3px solid ${isActive ? '#ffd700' : (isUnlocked ? '#444' : '#222')};
+      border-radius: 10px;
+      padding: 15px;
+      cursor: ${isUnlocked ? 'pointer' : 'not-allowed'};
+      opacity: ${isUnlocked ? '1' : '0.5'};
+      transition: all 0.3s;
+      position: relative;
+      min-height: 120px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    `;
+    
+    card.innerHTML = `
+      <div style="background: rgba(0,0,0,0.7); padding: 8px; border-radius: 5px;">
+        <div style="font-weight: bold; margin-bottom: 3px;">${bg.name}${isActive ? ' ✓' : ''}</div>
+        <div style="font-size: 0.85em; opacity: 0.9;">${bg.description}</div>
+        ${!isUnlocked ? `<div style="font-size: 0.8em; color: #ff6b6b; margin-top: 5px;">🔒 ${getUnlockText(bg.unlockCondition)}</div>` : ''}
+      </div>
+    `;
+    
+    if (isUnlocked) {
+      card.addEventListener('click', () => {
+        applyBackground(key);
+        openBackgroundSelector(); // Refresh
+      });
+      
+      card.addEventListener('mouseenter', () => {
+        if (!isActive) card.style.border = '3px solid #888';
+      });
+      
+      card.addEventListener('mouseleave', () => {
+        if (!isActive) card.style.border = '3px solid #444';
+      });
+    }
+    
+    grid.appendChild(card);
+  }
+  
+  modal.style.display = 'block';
+}
+
+function getUnlockText(condition) {
+  if (!condition) return 'Gesperrt';
+  if (condition.startsWith('prestige')) {
+    const num = condition.replace('prestige', '');
+    return `Prestige ${num}+`;
+  }
+  if (condition.startsWith('mythic')) {
+    const num = condition.replace('mythic', '');
+    return `${num} Mythische Items`;
+  }
+  if (condition.startsWith('aetheric')) {
+    const num = condition.replace('aetheric', '');
+    return `${num} Ätherische Items`;
+  }
+  return 'Gesperrt';
+}
+
+// Initial Background laden
+setTimeout(() => {
+  const saved = localStorage.getItem('activeBackground');
+  if (saved && backgrounds[saved]) {
+    applyBackground(saved);
+  } else {
+    applyBackground('default');
+  }
+  
+  // Prüfe Unlocks initial
+  checkBackgroundUnlocks();
+}, 100);
 
 // Force sync before page unload
 window.addEventListener('beforeunload', () => {
