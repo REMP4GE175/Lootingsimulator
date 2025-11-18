@@ -130,11 +130,34 @@ let skillPoints = 0;
 
 // Prestige-System: globale, dauerhafte Meta-Progression
 // Jede Prestige-Stufe verleiht: +5% Itemwert (stackt) und +1 Glück (stackt)
-let prestigeState = {
+// Internal prestige state object
+const _prestigeState = {
   level: 0,
   // Anzahl geöffneter Boxen seit dem letzten Prestige (für die 200er-Bedingung)
   runBoxesOpened: 0
 };
+
+// Protected prestige state with Proxy
+const prestigeState = new Proxy(_prestigeState, {
+  set(target, property, value) {
+    if (property === 'level') {
+      if (value > MAX_PRESTIGE_LEVEL) {
+        console.warn(`[ANTI-CHEAT] Prestige level cannot exceed ${MAX_PRESTIGE_LEVEL}. Blocked attempt to set to ${value}.`);
+        return false;
+      }
+      if (value < 0) {
+        console.warn(`[ANTI-CHEAT] Prestige level cannot be negative. Blocked attempt to set to ${value}.`);
+        return false;
+      }
+    }
+    if (property === 'runBoxesOpened' && value < 0) {
+      console.warn(`[ANTI-CHEAT] runBoxesOpened cannot be negative. Blocked attempt to set to ${value}.`);
+      return false;
+    }
+    target[property] = value;
+    return true;
+  }
+});
 
 // Skill-Tree: 3 Zweige mit jeweils maximal 20/20/10 Punkten
 const skills = {
@@ -324,11 +347,25 @@ const shopStatUpgrades = {
 };
 
 // Fortschritt/Levelstände der stackbaren Status-Upgrades
-let statUpgradesLevels = {
-  wealth: 0,
-  luck: 0,
-  tempo: 0
-};
+// Anti-cheat: Max limits for stats
+const MAX_STAT_LEVELS = { wealth: 100, luck: 100, tempo: 100 };
+const MAX_PRESTIGE_LEVEL = 1000;
+
+// Protected stat upgrades with validation
+let _statUpgradesLevels = { wealth: 0, luck: 0, tempo: 0 };
+const statUpgradesLevels = new Proxy(_statUpgradesLevels, {
+  set(target, prop, value) {
+    if (prop in MAX_STAT_LEVELS) {
+      const maxVal = MAX_STAT_LEVELS[prop];
+      if (value > maxVal) {
+        console.warn(`[ANTI-CHEAT] Attempt to set ${prop} to ${value} (max: ${maxVal})`);
+        return false;
+      }
+    }
+    target[prop] = value;
+    return true;
+  }
+});
 
 function getStatUpgradeCost(key) {
   const cfg = shopStatUpgrades[key];
@@ -561,7 +598,20 @@ try {
 }
 
 // Box-Typen mit Qualität (Wahrscheinlichkeiten in Prozent)
-const boxConfigs = {
+// Helper function for deep freeze
+function deepFreeze(obj) {
+  Object.freeze(obj);
+  Object.getOwnPropertyNames(obj).forEach(prop => {
+    if (obj[prop] !== null
+      && (typeof obj[prop] === "object" || typeof obj[prop] === "function")
+      && !Object.isFrozen(obj[prop])) {
+      deepFreeze(obj[prop]);
+    }
+  });
+  return obj;
+}
+
+const boxConfigs = deepFreeze({
   "Box#1": {
     cost: 0,
     columns: 2,
@@ -747,7 +797,7 @@ const boxConfigs = {
       Aetherisch: 0.1
     }
   }
-};
+});
 
 // Konstanten
 // Slot-Größe responsiv an Bildschirmbreite anpassen
