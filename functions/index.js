@@ -1,6 +1,5 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
-const gameConfig = require('./gameConfig');
 admin.initializeApp();
 
 const db = admin.firestore();
@@ -79,56 +78,6 @@ exports.syncUserData = functions.https.onRequest(async (req, res) => {
           return;
         }
       }
-    }
-
-    // Validate stats against MAX limits
-    if (data.statUpgradesLevels) {
-      const stats = data.statUpgradesLevels;
-      if (stats.wealth > gameConfig.MAX_STAT_LEVELS.wealth) {
-        res.status(403).json({ error: `Wealth stat cannot exceed ${gameConfig.MAX_STAT_LEVELS.wealth}` });
-        return;
-      }
-      if (stats.luck > gameConfig.MAX_STAT_LEVELS.luck) {
-        res.status(403).json({ error: `Luck stat cannot exceed ${gameConfig.MAX_STAT_LEVELS.luck}` });
-        return;
-      }
-      if (stats.tempo > gameConfig.MAX_STAT_LEVELS.tempo) {
-        res.status(403).json({ error: `Tempo stat cannot exceed ${gameConfig.MAX_STAT_LEVELS.tempo}` });
-        return;
-      }
-    }
-
-    // Validate prestige level
-    if (data.prestigeLevel > gameConfig.MAX_PRESTIGE_LEVEL) {
-      res.status(403).json({ error: `Prestige level cannot exceed ${gameConfig.MAX_PRESTIGE_LEVEL}` });
-      return;
-    }
-
-    // Validate skill points
-    const totalSkillPoints = (data.skills?.wohlstand || 0) + (data.skills?.glueck || 0) + (data.skills?.effizienz || 0);
-    if (totalSkillPoints > gameConfig.MAX_SKILL_POINTS) {
-      res.status(403).json({ error: `Total skill points cannot exceed ${gameConfig.MAX_SKILL_POINTS}` });
-      return;
-    }
-
-    // Plausibility check: balance shouldn't be astronomically high
-    const prestigeLevel = data.prestigeLevel || 0;
-    const boxesOpened = data.totalBoxesOpened || 0;
-    // Theoretical max: assume best box (Box#10, ~10000 avg) * boxes * prestige multiplier (up to 11x at prestige 1000)
-    const theoreticalMaxBalance = boxesOpened * 10000 * (1 + prestigeLevel * 0.01) * 2; // 2x safety margin
-    if (data.balance > theoreticalMaxBalance && theoreticalMaxBalance > 0) {
-      console.warn(`[ANTI-CHEAT] Suspicious balance for user ${userId}: ${data.balance} (theoretical max: ${theoreticalMaxBalance})`);
-      res.status(403).json({ error: 'Balance exceeds plausible maximum' });
-      return;
-    }
-
-    // Plausibility check: XP shouldn't be impossible
-    // Each box gives ~100-500 XP on average, prestige level gives bonus
-    const theoreticalMaxXP = boxesOpened * 500 * (1 + prestigeLevel * 0.01) * 2; // 2x safety margin
-    if (data.totalXPEarned > theoreticalMaxXP && theoreticalMaxXP > 0) {
-      console.warn(`[ANTI-CHEAT] Suspicious XP for user ${userId}: ${data.totalXPEarned} (theoretical max: ${theoreticalMaxXP})`);
-      res.status(403).json({ error: 'XP exceeds plausible maximum' });
-      return;
     }
 
     const userData = {
