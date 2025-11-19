@@ -1,6 +1,6 @@
 // ======= Zustandsvariablen =======
 // App Version (für Update-Check)
-const APP_VERSION = '0.74';
+const APP_VERSION = '0.75';
 
 // Items, die der Spieler bereits entdeckt hat
 const discoveredItems = new Set();
