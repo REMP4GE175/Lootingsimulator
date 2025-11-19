@@ -1,6 +1,6 @@
 // ======= Zustandsvariablen =======
 // App Version (für Update-Check)
-const APP_VERSION = '0.73';
+const APP_VERSION = '0.74';
 
 // Items, die der Spieler bereits entdeckt hat
 const discoveredItems = new Set();
@@ -59,6 +59,11 @@ function getItemImagePath(iconFileName, rarity) {
     }
     if (s.startsWith('Itembilder/')) {
       // Vollständiger Pfad - Segmente einzeln encoden
+      const parts = s.split('/');
+      return parts.map((part, idx) => idx === 0 ? part : encodeURIComponent(part)).join('/');
+    }
+    if (s.startsWith('Saisonale items LS/')) {
+      // Saisonale Items - Pfad bereits vollständig, nur encoden
       const parts = s.split('/');
       return parts.map((part, idx) => idx === 0 ? part : encodeURIComponent(part)).join('/');
     }
@@ -418,6 +423,17 @@ const backgrounds = {
     unlockCondition: 'aetheric10',
     type: 'gradient',
     value: 'linear-gradient(135deg, #8e2de2 0%, #4a00e0 100%)'
+  },
+  // Saisonale Hintergründe
+  christmas: {
+    name: 'Schnee',
+    description: 'Winterliche Schneelandschaft',
+    unlockCondition: 'seasonal_christmas',
+    type: 'image',
+    value: 'Backgroundbilder/Snow.png',
+    fallbackColor: '#e8f4f8',
+    seasonal: true,
+    event: 'christmas'
   }
 };
 
@@ -514,7 +530,7 @@ const itemPools = {
     { name: "Zahnstocher", icon: "Itembilder/Common/Zahnstocher.png", value: 3, description: "Ein Zahnstocher sie alle zu knechten.", gridSize: {width: 1, height: 1} },
   ],
   Rare: [
-    // Schlüssel (Rare) – seltener als Common-Schlüssel
+    // Rare slot Value ~ 150
     { name: "Schlüssel: Selten", icon: "Itembilder/Selten/seltener Schlüssel.png", value: 0, description: "Öffnet einen seltenen Raum mit Rare-lastigen Loot.", isKey: true, dropWeight: 0.6, gridSize: {width: 1, height: 1} },
     { name: "Silber Ring", icon: "Itembilder/Selten/Silber Ring.png", value: 150, description: "Ein hübscher Ring mit leichtem Glanz.", gridSize: {width: 1, height: 1} },
     { name: "Schatzkarte", icon: "Itembilder/Selten/Map.png", value: 250, description: "Zeigt vergessene Wege.", gridSize: {width: 1, height: 1} },
@@ -548,7 +564,7 @@ const itemPools = {
     { name: "Geldbeutel", icon: "Itembilder/Selten/Geldbeutel.png", value: 190, description: "Leder, mit initialen Prägung.", gridSize: {width: 1, height: 1} }
   ],
   Epic: [
-    // Schlüssel (Epic)
+    // Epic slot Value ~ 1500
     { name: "Schlüssel: Episch", icon: "Itembilder/Episch/epischer Schlüssel.png", value: 0, description: "Öffnet einen epischen Raum mit Epic-lastigen Loot.", isKey: true, dropWeight: 0.45, gridSize: {width: 1, height: 2} },
     { name: "Verzauberte Schriftrolle", icon: "Itembilder/Episch/Scroll.png", value: 7500, description: "Ein Zauber, der nur einmal wirkt.", gridSize: {width: 2, height: 2} },
     { name: "Phönixfeder", icon: "Itembilder/Episch/Phoenix Feder.png", value: 3500, description: "Glüht leicht in deiner Hand.", gridSize: {width: 1, height: 2} },
@@ -568,7 +584,7 @@ const itemPools = {
     { name: "Röhrenradio", icon: "Itembilder/Episch/röhrenradio.png", value: 6900, description: "Retro-Radio aus Holz, spielt noch.", gridSize: {width: 2, height: 2} },
     { name: "Schreibmaschine", icon: "Itembilder/Episch/schreibmaschine.png", value: 6850, description: "Mechanische Underwood, alle Tasten funktionieren.", gridSize: {width: 2, height: 2} },
     { name: "Ölgemälde", icon: "Itembilder/Episch/oelgemaelde.png", value: 6000, description: "Signiertes Landschaftsbild, Rahmen vergoldet.", gridSize: {width: 2, height: 2} },
-    { name: "Marmor-Statue", icon: "Itembilder/Episch/marmorstatue.png", value: 11500, description: "Kleine Figur, schwer und detailreich.", gridSize: {width: 2, height: 3} },
+    { name: "Marmor-Statue", icon: "Itembilder/Episch/marmorstatue.png", value: 11500, description: "Eine edle Figur, schwer und detailreich.", gridSize: {width: 2, height: 3} },
     { name: "Kristall-Vase", icon: "Itembilder/Episch/kristall_vase.png", value: 9000, description: "Handgeschliffen, böhmisches Glas.", gridSize: {width: 2, height: 2} },
     { name: "Dolch (Antik)", icon: "Itembilder/Episch/dolch.png", value: 3800, description: "Zeremoniendolch mit Verzierungen.", gridSize: {width: 1, height: 2} },
     { name: "Militärkompass", icon: "Itembilder/Episch/militaerkompass.png", value: 700, description: "Aus dem 2. Weltkrieg, funktioniert noch.", gridSize: {width: 1, height: 1} },
@@ -577,7 +593,7 @@ const itemPools = {
     
   ],
   Legendary: [
-    // Schlüssel (Legendary) – sehr selten
+    // Legendary slot Value ~ 10000
   { name: "Schlüssel: Legendär", icon: "Itembilder/Legendär/legendärer Schlüssel.png", value: 0, description: "Öffnet einen legendären Raum mit Legendary-lastigen Loot.", isKey: true, dropWeight: 0.3, gridSize: {width: 1, height: 1} },
     { name: "Drachenschuppe", icon: "Itembilder/Legendär/Drachenschuppe.png", value: 39000, description: "Unzerstörbar und selten.", gridSize: {width: 2, height: 2} },
     { name: "Goldblock", icon: "Itembilder/Legendär/Goldblock.png", value: 18000, description: "Ein massiver Block aus reinem Gold.", gridSize: {width: 1, height: 2} },
@@ -592,11 +608,11 @@ const itemPools = {
     { name: "Runenstein", icon: "Itembilder/Legendär/Runenstein.png", value: 28600, description: "Antiker Stein mit leuchtenden Runen.", gridSize: {width: 2, height: 2} }
   ],
   Mythisch: [
-    // Schlüssel (Mythisch) – extrem selten
+    // Mythisch slot Value ~ 50000
   { name: "Schlüssel: Mythisch", icon: "Itembilder/Mythisch/Schlüssel Mythisch.png", value: 0, description: "Öffnet einen mythischen Raum mit hochwertigem Loot.", isKey: true, dropWeight: 0.15, gridSize: {width: 1, height: 1} },
     { name: "Mystische Klinge", icon: "Itembilder/Mythisch/mystic_blade.png", value: 180000, description: "Eine legendäre Klinge mit uralter Macht.", gridSize: {width: 2, height: 3} },
     { name: "Goldener Löwe", icon: "Itembilder/Mythisch/Goldener Löwe.png", value: 250000, description: "Ein goldenes Abbild von Stärke, Mut und Tapferkeit.", gridSize: {width: 3, height: 3} },
-    { name: "Geheime Dokumente", icon: "Itembilder/Mythisch/geheime_dokumente.png", value: 190000, description: "Streng geheime Regierungsunterlagen.", gridSize: {width: 2, height: 1} },
+    { name: "Vergoldete Statue", icon: "Itembilder/Mythisch/Vergoldete Statue.png", value: 190000, description: "Eine Majestätische Figur aus Marmor und Gold.", gridSize: {width: 2, height: 3} },
     { name: "Philosophenstein", icon: "Itembilder/Mythisch/philosophenstein.png", value: 210000, description: "Verwandelt das Gewöhnliche in Gold.", gridSize: {width: 2, height: 2} },
     { name: "Singularitätskern", icon: "Itembilder/Mythisch/singularitaetskern.png", value: 240000, description: "Komprimierte Raumzeit in einer Kapsel.", gridSize: {width: 2, height: 2} },
     { name: "Ewige Flamme", icon: "Itembilder/Mythisch/Ewige Flamme1.png", value: 170000, description: "Brennt ohne jede Quelle weiter.", gridSize: {width: 2, height: 3} },
@@ -607,9 +623,9 @@ const itemPools = {
   ]
   ,
   Aetherisch: [
-    { name: "Floki", icon: "Itembilder/Aetherisch/Floki.jpg", value: 500000, description: "Floki, Schlächter von Dreamies und besetzer der Kartons.", gridSize: {width: 3, height: 3} },
-    { name: "Biene", icon: "Itembilder/Aetherisch/Biene.jpg", value: 500000, description: "Biene, Träger des Fluffs und besetzerin von Höhlen.", gridSize: {width: 3, height: 3} },
-    { name: "Simba", icon: "Itembilder/Aetherisch/Simba.jpg", value: 500000, description: "Simba, König des Türkisen Stuhls.", gridSize: {width: 3, height: 3} }
+    { name: "Floki", icon: "Itembilder/Aetherisch/Floki.jpg", value: 500000, description: "Floki, Schlächter von Dreamies und besetzer der Kartons.", gridSize: {width: 2, height: 3} },
+    { name: "Biene", icon: "Itembilder/Aetherisch/Biene.jpg", value: 500000, description: "Biene, Träger des Fluffs und besetzerin von Höhlen.", gridSize: {width: 3, height: 2} },
+    { name: "Simba", icon: "Itembilder/Aetherisch/Simba.jpg", value: 500000, description: "Simba, König des Türkisen Stuhls.", gridSize: {width: 2, height: 3} }
   ]
 };
 
@@ -621,6 +637,127 @@ try {
   }
 } catch (e) {
   console.warn('Alphabetische Sortierung der Item-Pools fehlgeschlagen:', e);
+}
+
+// ======= SAISONALE ITEMS =======
+// Saisonale Items werden zeitbasiert zu den normalen Item-Pools hinzugefügt
+const seasonalItems = {
+  christmas: {
+    name: "Weihnachten",
+    startDate: { month: 12, day: 1 },      // 1. Dezember
+    endDate: { month: 1, day: 6 },         // 6. Januar (Dreikönigstag)
+    dropChance: 0.25,                       // 25% Chance auf saisonales Item statt normalem
+    items: {
+      Common: [
+        { name: "Kohle", icon: "Saisonale items LS/Weihnachten/Common/Kohle.png", value: 15, description: "Für die ungezogenen Kinder.", seasonal: true, gridSize: {width: 1, height: 1} },
+        { name: "Zuckerstange", icon: "Saisonale items LS/Weihnachten/Common/Zuckerstange.png", value: 25, description: "Rot-weiß gestreift und lecker.", seasonal: true, gridSize: {width: 1, height: 1} },
+        { name: "Weihnachtsmütze", icon: "Saisonale items LS/Weihnachten/Common/Weihnachtsmütze.png", value: 30, description: "Ho ho ho!", seasonal: true, gridSize: {width: 1, height: 1} },
+        { name: "Mistelzweig", icon: "Saisonale items LS/Weihnachten/Common/Mistelzweig.png", value: 35, description: "Für romantische Momente.", seasonal: true, gridSize: {width: 1, height: 1} },
+        { name: "Milch und Kekse", icon: "Saisonale items LS/Weihnachten/Common/Milch und Kekse.png", value: 40, description: "Für den Weihnachtsmann.", seasonal: true, gridSize: {width: 1, height: 1} },
+        { name: "Glöckchen", icon: "Saisonale items LS/Weihnachten/Common/Glökchen.png", value: 28, description: "Läutet die Weihnachtszeit ein.", seasonal: true, gridSize: {width: 1, height: 1} },
+        { name: "Tannennadeln", icon: "Saisonale items LS/Weihnachten/Common/Tannennadeln.png", value: 18, description: "Vom Weihnachtsbaum gefallen.", seasonal: true, gridSize: {width: 1, height: 1} },
+        { name: "Nussknacker", icon: "Saisonale items LS/Weihnachten/Common/Nussknacker.png", value: 32, description: "Knackt Nüsse wie ein Profi.", seasonal: true, gridSize: {width: 1, height: 2} },
+        { name: "Weihnachtskugel", icon: "Saisonale items LS/Weihnachten/Common/Weihnachtskugel.png", value: 38, description: "Glänzender Baumschmuck.", seasonal: true, gridSize: {width: 1, height: 1} }
+      ],
+      Rare: [
+        { name: "Lebkuchenmännchen", icon: "Saisonale items LS/Weihnachten/Selten/Lebkuchenmännchen.png", value: 120, description: "Frisch gebacken mit Zuckerguss.", seasonal: true, gridSize: {width: 1, height: 1} },
+        { name: "Geschenk", icon: "Saisonale items LS/Weihnachten/Selten/Geschenk.png", value: 550, description: "Liebevoll verpackt.", seasonal: true, gridSize: {width: 2, height: 2} },
+        { name: "Adventskranz", icon: "Saisonale items LS/Weihnachten/Selten/Adventskranz.png", value: 580, description: "Frohen Advent!", seasonal: true, gridSize: {width: 2, height: 2} },
+        { name: "Engelsfigur", icon: "Saisonale items LS/Weihnachten/Selten/Engelsfigur.png", value: 165, description: "Wacht über das Fest.", seasonal: true, gridSize: {width: 1, height: 1} },
+        { name: "Lebkuchenhaus", icon: "Saisonale items LS/Weihnachten/Selten/Lebkuchenhaus.png", value: 595, description: "Mit Zuckerguss verziert.", seasonal: true, gridSize: {width: 2, height: 2} },
+        { name: "Spieluhr", icon: "Saisonale items LS/Weihnachten/Selten/Spieluhr.png", value: 210, description: "Spielt 'Stille Nacht'.", seasonal: true, gridSize: {width: 1, height: 1} },
+        { name: "Weihnachtsstern", icon: "Saisonale items LS/Weihnachten/Selten/Weihnachtsstern.png", value: 155, description: "Pflanze in voller Blüte.", seasonal: true, gridSize: {width: 1, height: 1} }
+      ],
+      Epic: [
+        { name: "Schneekugel", icon: "Saisonale items LS/Weihnachten/Episch/Schneekugel.png", value: 2850, description: "Schüttel sie und es schneit.", seasonal: true, gridSize: {width: 1, height: 1} },
+        { name: "Schneeflocke", icon: "Saisonale items LS/Weihnachten/Episch/Schneeflocke.png", value: 2950, description: "Jede ist einzigartig.", seasonal: true, gridSize: {width: 1, height: 1} },
+        { name: "Königlicher Nussknacker", icon: "Saisonale items LS/Weihnachten/Episch/Königlicher Nussknacker.png", value: 4150, description: "Bewacht das Wohnzimmer.", seasonal: true, gridSize: {width: 1, height: 2} },
+        { name: "Weihnachtspyramide", icon: "Saisonale items LS/Weihnachten/Episch/Weihnachtspyramide.png", value: 6300, description: "Dreht sich durch Kerzenwärme.", seasonal: true, gridSize: {width: 2, height: 2} }
+      ],
+      Legendary: [
+        { name: "Weihnachtsbaum", icon: "Saisonale items LS/Weihnachten/Legendär/Weihnachtsbaum.png", value: 48500, description: "Festlich geschmückt für ein besinnliches Fest.", seasonal: true, gridSize: {width: 2, height: 3} },
+        { name: "Schneemann", icon: "Saisonale items LS/Weihnachten/Legendär/Schneemann.png", value: 49200, description: "Frosty höchstpersönlich.", seasonal: true, gridSize: {width: 2, height: 3} },
+        { name: "Rentierfigur", icon: "Saisonale items LS/Weihnachten/Legendär/Rentierfigur.png", value: 49800, description: "Rudolphs kleiner Bruder.", seasonal: true, gridSize: {width: 2, height: 2} }
+      ],
+      Mythisch: [
+        { name: "Schlitten", icon: "Saisonale items LS/Weihnachten/Mythisch/Schlitten.png", value: 195000, description: "Der Schlitten des Weihnachtsmanns.", seasonal: true, gridSize: {width: 3, height: 2} }
+      ],
+      Aetherisch: [
+        { name: "Polarstern", icon: "Saisonale items LS/Weihnachten/Aetherisch/Polarstern.png", value: 520000, description: "Leitet die Weisen zum Stall.", seasonal: true, gridSize: {width: 3, height: 3} }
+      ]
+    }
+  }
+  // Weitere Events können hier hinzugefügt werden:
+  // halloween: { ... },
+  // easter: { ... },
+  // etc.
+};
+
+// Prüft ob ein saisonales Event aktuell aktiv ist
+function getActiveSeasonalEvent() {
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // JavaScript: 0-11, wir wollen 1-12
+  const currentDay = now.getDate();
+  
+  for (const [key, event] of Object.entries(seasonalItems)) {
+    const { startDate, endDate } = event;
+    
+    // Event überspannt Jahreswechsel (z.B. Dez - Jan)
+    if (startDate.month > endDate.month) {
+      // Prüfe ob wir im Start-Jahr sind (nach Start-Datum)
+      if (currentMonth > startDate.month || (currentMonth === startDate.month && currentDay >= startDate.day)) {
+        return event;
+      }
+      // Prüfe ob wir im End-Jahr sind (vor End-Datum)
+      if (currentMonth < endDate.month || (currentMonth === endDate.month && currentDay <= endDate.day)) {
+        return event;
+      }
+    } else {
+      // Normales Event innerhalb eines Jahres
+      const afterStart = currentMonth > startDate.month || (currentMonth === startDate.month && currentDay >= startDate.day);
+      const beforeEnd = currentMonth < endDate.month || (currentMonth === endDate.month && currentDay <= endDate.day);
+      
+      if (afterStart && beforeEnd) {
+        return event;
+      }
+    }
+  }
+  
+  // Kein Event aktiv - Reset der Event-Flags
+  localStorage.removeItem('hasSeenSeasonalBackground_christmas');
+  
+  return null; // Kein aktives Event
+}
+
+// Erstellt kombinierte Item-Pools mit saisonalen Items
+function getCombinedItemPools() {
+  const activeEvent = getActiveSeasonalEvent();
+  
+  // Kein Event aktiv - normale Pools zurückgeben
+  if (!activeEvent) {
+    return itemPools;
+  }
+  
+  // Event aktiv - kombiniere normale und saisonale Items
+  const combined = {};
+  
+  for (const rarity of rarities) {
+    const normalItems = itemPools[rarity] || [];
+    const seasonalItemsForRarity = (activeEvent.items && activeEvent.items[rarity]) || [];
+    
+    // Kombiniere beide Arrays
+    combined[rarity] = [...normalItems, ...seasonalItemsForRarity];
+  }
+  
+  return combined;
+}
+
+// Modifizierte Hilfsfunktion für saisonale Item-Auswahl
+function shouldDropSeasonalItem() {
+  const activeEvent = getActiveSeasonalEvent();
+  if (!activeEvent) return false;
+  
+  return Math.random() < activeEvent.dropChance;
 }
 
 // Box-Typen mit Qualität (Wahrscheinlichkeiten in Prozent)
@@ -1105,7 +1242,18 @@ function getRandomItem(boxType) {
   for (const rarity of rarities) {
     const w = weights[rarity] || 0;
     if (rand < w) {
-      const pool = itemPools[rarity] || itemPools.Common;
+      // Saisonale Items: Prüfe ob ein Event aktiv ist und ob ein saisonales Item droppen soll
+      const activeEvent = getActiveSeasonalEvent();
+      let pool = itemPools[rarity] || itemPools.Common;
+      
+      if (activeEvent && shouldDropSeasonalItem()) {
+        // Nutze saisonale Items für diese Rarität (falls vorhanden)
+        const seasonalPool = (activeEvent.items && activeEvent.items[rarity]) || [];
+        if (seasonalPool.length > 0) {
+          pool = seasonalPool;
+        }
+      }
+      
       const item = weightedSampleByDropWeight(pool);
       // Item-Wert mit Wohlstand-Multiplikator anwenden
       const baseValue = item.value;
@@ -2506,6 +2654,12 @@ function createEmptyGrid() {
 
 // Event-Handler für den Öffnen-Button
 dom.openBtn.addEventListener('click', async () => {
+  // Blockiere Box-Öffnung während Prestige läuft
+  if (isPrestiging) {
+    alert('Bitte warte, bis der Prestige-Vorgang abgeschlossen ist.');
+    return;
+  }
+  
   // Auto-Clicker: Erlaube Auto-Runs nach manuellem Öffnen
   if (autoClickerEnabled && (permanentUpgrades.permAutoClicker || 0) >= 1) {
     autoClickerCanRun = true;
@@ -3016,7 +3170,8 @@ dom.openBtn.addEventListener('click', async () => {
         mythicsFound: Number(mythCount || 0),
         aethericsFound: Number(aetherCount || 0),
         totalBoxesOpened: Number((stats && stats.totalBoxesOpened) || 0),
-        displayName: localStorage.getItem('playerDisplayName') || undefined
+        displayName: localStorage.getItem('playerDisplayName') || undefined,
+        prestigeLevel: Number(prestigeState.level || 0)
       };
       // Nicht blockierend - Fire and forget
       window.firebaseApi.updateStats(payload).catch(err => {
@@ -3933,17 +4088,19 @@ function showCollection() {
     'Epic': 'Episch',
     'Legendary': 'Legendär',
     'Mythisch': 'Mythisch',
-    'Aetherisch': 'Ätherisch'
+    'Ätherisch': 'Ätherisch'
   };
 
+  // Normale Items anzeigen
   for (const rarity of rarities) {
     // Abschnitt für jede Rarität
     const section = document.createElement('div');
     section.classList.add('rarity-section');
 
-    // Zähle entdeckte Items dieser Rarität
-    const totalItems = (itemPools[rarity] || []).length;
-    const discoveredCount = (itemPools[rarity] || []).filter(item => discoveredItems.has(item.name)).length;
+    // Zähle entdeckte Items dieser Rarität (nur normale Items)
+    const normalItems = (itemPools[rarity] || []).filter(item => !item.seasonal);
+    const totalItems = normalItems.length;
+    const discoveredCount = normalItems.filter(item => discoveredItems.has(item.name)).length;
 
     const sectionTitle = document.createElement('h2');
     sectionTitle.textContent = `${rarityNames[rarity] || rarity} (${discoveredCount}/${totalItems})`;
@@ -3953,7 +4110,7 @@ function showCollection() {
     const rarityContainer = document.createElement('div');
     rarityContainer.classList.add('grid');
 
-    for (const item of itemPools[rarity] || []) {
+    for (const item of normalItems) {
       const div = document.createElement('div');
       div.classList.add('item');
 
@@ -4031,6 +4188,104 @@ function showCollection() {
 
     section.appendChild(rarityContainer);
     grid.appendChild(section);
+  }
+
+  // Saisonale Items-Sektion (falls verfügbar)
+  const activeEvent = getActiveSeasonalEvent();
+  if (activeEvent) {
+    // Trennlinie
+    const divider = document.createElement('div');
+    divider.style.width = '100%';
+    divider.style.height = '2px';
+    divider.style.background = 'linear-gradient(to right, transparent, #555, transparent)';
+    divider.style.margin = '30px 0';
+    grid.appendChild(divider);
+
+    // Event-Titel
+    const eventHeader = document.createElement('h1');
+    eventHeader.textContent = `🎄 ${activeEvent.name} 🎄`;
+    eventHeader.style.textAlign = 'center';
+    eventHeader.style.color = '#f1c40f';
+    eventHeader.style.marginBottom = '20px';
+    eventHeader.style.fontSize = '24px';
+    grid.appendChild(eventHeader);
+
+    // Zeige saisonale Items pro Rarität
+    for (const rarity of rarities) {
+      const seasonalItemsForRarity = (activeEvent.items && activeEvent.items[rarity]) || [];
+      if (seasonalItemsForRarity.length === 0) continue;
+
+      const section = document.createElement('div');
+      section.classList.add('rarity-section');
+
+      const discoveredCount = seasonalItemsForRarity.filter(item => discoveredItems.has(item.name)).length;
+      const totalItems = seasonalItemsForRarity.length;
+
+      const sectionTitle = document.createElement('h2');
+      sectionTitle.textContent = `${rarityNames[rarity] || rarity} (${discoveredCount}/${totalItems})`;
+      sectionTitle.style.color = colors[rarity] || '#fff';
+      section.appendChild(sectionTitle);
+
+      const rarityContainer = document.createElement('div');
+      rarityContainer.classList.add('grid');
+
+      for (const item of seasonalItemsForRarity) {
+        const div = document.createElement('div');
+        div.classList.add('item', 'seasonal-item');
+
+        const img = document.createElement('img');
+        img.src = item.icon; // Saisonale Items haben bereits vollständigen Pfad
+        img.alt = item.name || '';
+        img.onerror = () => {
+          img.onerror = null;
+          img.src = getItemImagePath('LeereKarte.png', 'Common');
+        };
+
+        if (discoveredItems.has(item.name)) {
+          img.style.backgroundColor = colors[rarity];
+          div.appendChild(img);
+          const label = document.createElement('div');
+          label.textContent = item.name;
+          div.appendChild(label);
+
+          attachTooltip(div, {
+            name: item.name,
+            value: item.value,
+            description: item.description || '',
+            rarity,
+            quoteAuthor: item.quoteAuthor || ''
+          });
+
+          const count = itemCounts[item.name] || 0;
+          const badge = document.createElement('div');
+          badge.classList.add('item-count-badge');
+          badge.textContent = count;
+          div.appendChild(badge);
+
+          if (lastPulledItems && lastPulledItems.has(item.name)) {
+            div.classList.add('last-pulled');
+          }
+        } else {
+          img.classList.add('locked');
+          div.appendChild(img);
+          const label = document.createElement('div');
+          label.textContent = '???';
+          div.appendChild(label);
+
+          attachTooltip(div, {
+            name: '???',
+            value: null,
+            description: 'Noch unbekannt.',
+            rarity
+          });
+        }
+
+        rarityContainer.appendChild(div);
+      }
+
+      section.appendChild(rarityContainer);
+      grid.appendChild(section);
+    }
   }
 
   // Stelle sicher, dass das Overlay als letztes Kind im <body> liegt
@@ -4894,6 +5149,27 @@ function proceedAfterPrestige() {
   updatePrestigeUI();
   saveProgress();
 
+  // Firebase: Stats mit neuem Prestige-Level synchronisieren
+  try {
+    if (window.firebaseApi && typeof window.firebaseApi.updateStats === 'function') {
+      const mythCount = Math.max(0, getDiscoveredCountByRarity('Mythisch') || 0);
+      const aetherCount = Math.max(0, getDiscoveredCountByRarity('Aetherisch') || 0);
+      const payload = {
+        totalXP: Number(totalXPEarned || 0),
+        mythicsFound: Number(mythCount || 0),
+        aethericsFound: Number(aetherCount || 0),
+        totalBoxesOpened: Number((stats && stats.totalBoxesOpened) || 0),
+        displayName: localStorage.getItem('playerDisplayName') || undefined,
+        prestigeLevel: Number(prestigeState.level || 0)
+      };
+      window.firebaseApi.updateStats(payload).catch(err => {
+        console.warn('Failed to sync prestige stats to Firebase:', err);
+      });
+    }
+  } catch (err) {
+    console.warn('Firebase prestige sync error:', err);
+  }
+
   // Schließe Modal und zeige kleines Feedback
   if (dom.prestigeModal) dom.prestigeModal.style.display = 'none';
   try {
@@ -5142,6 +5418,11 @@ function startAutoClicker() {
       return;
     }
     
+    // Blockiere Auto-Clicker während Prestige läuft
+    if (isPrestiging) {
+      return;
+    }
+    
     // Prüfe ob genug Zeit seit letzter Öffnung vergangen ist (abhängig von Speed-Upgrade)
     const now = Date.now();
     const requiredDelay = autoClickerSpeed * 1000; // 3s, 2s oder 1s
@@ -5371,6 +5652,7 @@ function checkBackgroundUnlocks() {
   const prestige = prestigeState.level || 0;
   const mythicCount = getDiscoveredCountByRarity('Mythisch') || 0;
   const aethericCount = getDiscoveredCountByRarity('Aetherisch') || 0;
+  const activeEvent = getActiveSeasonalEvent();
   
   for (const [key, bg] of Object.entries(backgrounds)) {
     if (bg.unlocked || unlockedBackgrounds.has(key)) {
@@ -5390,6 +5672,10 @@ function checkBackgroundUnlocks() {
       } else if (bg.unlockCondition.startsWith('aetheric')) {
         const required = parseInt(bg.unlockCondition.replace('aetheric', ''));
         unlocked = aethericCount >= required;
+      } else if (bg.unlockCondition.startsWith('seasonal_')) {
+        // Saisonale Hintergründe - freigeschaltet wenn Event aktiv ist
+        const eventKey = bg.unlockCondition.replace('seasonal_', '');
+        unlocked = activeEvent && seasonalItems[eventKey] !== undefined;
       }
     }
     
@@ -5523,7 +5809,11 @@ function openBackgroundSelector() {
       justify-content: flex-end;
     `;
     
+    // Saisonaler Indikator (Schneeflocke für Weihnachten)
+    const seasonalIcon = bg.seasonal ? `<div style="position: absolute; top: 8px; right: 8px; font-size: 24px;">❄️</div>` : '';
+    
     card.innerHTML = `
+      ${seasonalIcon}
       <div style="background: rgba(0,0,0,0.7); padding: 8px; border-radius: 5px;">
         <div style="font-weight: bold; margin-bottom: 3px;">${bg.name}${isActive ? ' ✓' : ''}</div>
         <div style="font-size: 0.85em; opacity: 0.9;">${bg.description}</div>
@@ -5566,13 +5856,36 @@ function getUnlockText(condition) {
     const num = condition.replace('aetheric', '');
     return `${num} Ätherische Items`;
   }
+  if (condition.startsWith('seasonal_')) {
+    const eventKey = condition.replace('seasonal_', '');
+    const event = seasonalItems[eventKey];
+    if (event) {
+      return `Nur während ${event.name}`;
+    }
+  }
   return 'Gesperrt';
 }
 
 // Initial Background laden
 setTimeout(() => {
   const saved = localStorage.getItem('activeBackground');
-  if (saved && backgrounds[saved]) {
+  const activeEvent = getActiveSeasonalEvent();
+  
+  // Prüfe ob ein saisonales Event aktiv ist und ob der Nutzer das erste Mal lädt
+  const hasSeenSeasonalBackground = localStorage.getItem('hasSeenSeasonalBackground_christmas');
+  
+  if (activeEvent && activeEvent.name === 'Weihnachten' && !hasSeenSeasonalBackground) {
+    // Erstes Mal während Weihnachten - wähle Schneehintergrund automatisch
+    checkBackgroundUnlocks();
+    if (unlockedBackgrounds.has('christmas') || backgrounds.christmas.unlocked) {
+      applyBackground('christmas');
+      localStorage.setItem('hasSeenSeasonalBackground_christmas', 'true');
+    } else if (saved && backgrounds[saved]) {
+      applyBackground(saved);
+    } else {
+      applyBackground('default');
+    }
+  } else if (saved && backgrounds[saved]) {
     applyBackground(saved);
   } else {
     applyBackground('default');
@@ -5581,6 +5894,23 @@ setTimeout(() => {
   // Prüfe Unlocks initial
   checkBackgroundUnlocks();
 }, 100);
+
+// Saisonales Logo-System
+function updateSeasonalLogo() {
+  const logo = document.getElementById('gameLogo');
+  if (!logo) return;
+  
+  const activeEvent = getActiveSeasonalEvent();
+  
+  if (activeEvent && activeEvent.name === 'Weihnachten') {
+    logo.src = "Logo's/Logo Weihnachten.png";
+  } else {
+    logo.src = "Logo's/Logo.png";
+  }
+}
+
+// Logo beim Laden aktualisieren
+setTimeout(updateSeasonalLogo, 50);
 
 // Force sync before page unload
 window.addEventListener('beforeunload', () => {

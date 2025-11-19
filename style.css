@@ -761,6 +761,22 @@ h1 {
   border: 1px solid rgba(255,255,255,0.04);
 }
 
+/* Saisonale Items - subtiler Glanz-Effekt */
+.seasonal-item {
+  position: relative;
+}
+
+.seasonal-item::before {
+  content: '❄️';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 14px;
+  opacity: 0.8;
+  pointer-events: none;
+  z-index: 10;
+}
+
 .floating-lupe {
   position: absolute; /* Angepasst für Slot-relative Positionierung */
   transform: translate(-50%, -50%);
