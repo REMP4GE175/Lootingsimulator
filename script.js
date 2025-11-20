@@ -160,7 +160,9 @@ const stats = {
     'Box#9': 0, 'Box#10': 0
   },
   // Kumulativ gefundene Schlüssel (nicht Inventarbestand)
-  keysFoundCounts: { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 }
+  keysFoundCounts: { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 },
+  // Lifetime-Counter für entdeckte Items pro Rarität (über Prestige hinaus)
+  lifetimeDiscovered: { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0, Aetherisch: 0 }
 };
 
 // Sicherstellen, dass neue Boxen-Schlüssel in alten Saves existieren
@@ -172,6 +174,17 @@ function ensureBoxOpenCountsKeys() {
     for (const name of boxOrder) {
       if (!Object.prototype.hasOwnProperty.call(stats.boxOpenCounts, name)) {
         stats.boxOpenCounts[name] = 0;
+      }
+    }
+    
+    // Stelle sicher dass lifetimeDiscovered existiert
+    if (!stats.lifetimeDiscovered || typeof stats.lifetimeDiscovered !== 'object') {
+      stats.lifetimeDiscovered = { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0, Aetherisch: 0 };
+    }
+    // Initialisiere mit aktuellen Entdeckungen falls noch nicht vorhanden
+    for (const rarity of rarities) {
+      if (!stats.lifetimeDiscovered[rarity]) {
+        stats.lifetimeDiscovered[rarity] = getDiscoveredCountByRarity(rarity);
       }
     }
   } catch (_) { /* ignore */ }
@@ -414,8 +427,9 @@ const backgrounds = {
     name: 'Galaxie',
     description: 'Sternenwirbel',
     unlockCondition: 'mythic100',
-    type: 'gradient',
-    value: 'linear-gradient(135deg, #360033 0%, #0b8793 100%)'
+    type: 'image',
+    value: 'Backgroundbilder/Galaxie.png',
+    fallbackColor: '#1a0033'
   },
   aether: {
     name: 'Äther',
@@ -426,11 +440,11 @@ const backgrounds = {
   },
   // Saisonale Hintergründe
   christmas: {
-    name: 'Schnee',
+    name: 'Weihnachten',
     description: 'Winterliche Schneelandschaft',
     unlockCondition: 'seasonal_christmas',
     type: 'image',
-    value: 'Backgroundbilder/Snow.png',
+    value: 'Backgroundbilder/Weihnachten.png',
     fallbackColor: '#e8f4f8',
     seasonal: true,
     event: 'christmas'
@@ -611,7 +625,7 @@ const itemPools = {
     // Mythisch slot Value ~ 50000
   { name: "Schlüssel: Mythisch", icon: "Itembilder/Mythisch/Schlüssel Mythisch.png", value: 0, description: "Öffnet einen mythischen Raum mit hochwertigem Loot.", isKey: true, dropWeight: 0.15, gridSize: {width: 1, height: 1} },
     { name: "Mystische Klinge", icon: "Itembilder/Mythisch/mystic_blade.png", value: 180000, description: "Eine legendäre Klinge mit uralter Macht.", gridSize: {width: 2, height: 3} },
-    { name: "Goldener Löwe", icon: "Itembilder/Mythisch/Goldener Löwe.png", value: 250000, description: "Ein goldenes Abbild von Stärke, Mut und Tapferkeit.", gridSize: {width: 3, height: 3} },
+    { name: "Goldener Löwe", icon: "Itembilder/Mythisch/Goldener Löwe.png", value: 250000, description: "Ein goldenes Abbild von Stärke, Mut und Tapferkeit.", gridSize: {width: 2, height: 3} },
     { name: "Vergoldete Statue", icon: "Itembilder/Mythisch/Vergoldete Statue.png", value: 190000, description: "Eine Majestätische Figur aus Marmor und Gold.", gridSize: {width: 2, height: 3} },
     { name: "Philosophenstein", icon: "Itembilder/Mythisch/philosophenstein.png", value: 210000, description: "Verwandelt das Gewöhnliche in Gold.", gridSize: {width: 2, height: 2} },
     { name: "Singularitätskern", icon: "Itembilder/Mythisch/singularitaetskern.png", value: 240000, description: "Komprimierte Raumzeit in einer Kapsel.", gridSize: {width: 2, height: 2} },
@@ -644,7 +658,7 @@ try {
 const seasonalItems = {
   christmas: {
     name: "Weihnachten",
-    startDate: { month: 12, day: 1 },      // 1. Dezember
+    startDate: { month: 11, day: 19 },      // 19. November
     endDate: { month: 1, day: 6 },         // 6. Januar (Dreikönigstag)
     dropChance: 0.25,                       // 25% Chance auf saisonales Item statt normalem
     items: {
@@ -1170,8 +1184,8 @@ function getTempoMultiplier() {
   // Prestige-Bonus: -2% Untersuchungszeit pro Prestige-Stufe
   const prestigeReduce = (prestigeState.level || 0) * 0.02;
   const raw = 1 - (skillReduce + shopReduce + permReduce + prestigeReduce);
-  // Kappe damit es nicht zu 0 fällt
-  return Math.max(0.3, Math.min(1, raw));
+  // Minimale Zeit: 1% (maximal 99% Reduktion)
+  return Math.max(0.01, Math.min(1, raw));
 }
 
 // Berechnet die Anzahl der Items basierend auf Slot-Füllrate (20-100%, Peak bei 50%) + permanente Shop-Upgrades
@@ -2235,6 +2249,9 @@ function openWithKey(rarity) {
 const STORAGE_KEY = 'lootsim_itemCounts_v1';
 const PROGRESS_KEY = 'lootsim_progress_v1';
 const KEY_DISCOVERY_KEY = 'lootsim_keyDiscovery_v1';
+const ITEMS_KEY = 'lootsim_itemCounts_v1';
+const DISCOVERED_KEY = 'lootsim_discovered_v1';
+const UNLOCKED_BACKGROUNDS_KEY = 'lootsim_unlockedBackgrounds_v1';
 
 // Objekt: { [itemName]: count }
 let itemCounts = {};
@@ -2350,6 +2367,21 @@ function syncToFirebase(progress) {
       console.warn('Could not count mythics/aetherics:', e);
     }
     
+    // Lade Item-Daten aus localStorage
+    let itemCounts = {};
+    let discoveredItems = [];
+    let unlockedBgs = ['default'];
+    try {
+      const itemsRaw = localStorage.getItem(ITEMS_KEY);
+      if (itemsRaw) itemCounts = JSON.parse(itemsRaw);
+      const discoveredRaw = localStorage.getItem(DISCOVERED_KEY);
+      if (discoveredRaw) discoveredItems = JSON.parse(discoveredRaw);
+      const bgsRaw = localStorage.getItem(UNLOCKED_BACKGROUNDS_KEY);
+      if (bgsRaw) unlockedBgs = JSON.parse(bgsRaw);
+    } catch (e) {
+      console.warn('Could not load item data for sync:', e);
+    }
+    
     const userData = {
       displayName: localStorage.getItem('playerDisplayName') || 'Anonym',
       totalXPEarned: progress.totalXPEarned,
@@ -2370,7 +2402,11 @@ function syncToFirebase(progress) {
       keysInventory: progress.keysInventory,
       boxType: progress.boxType,
       unlockedBoxes: progress.unlockedBoxes,
-      stats: progress.stats
+      stats: progress.stats,
+      itemCounts,
+      discoveredItems,
+      unlockedBackgrounds: unlockedBgs,
+      activeBackground: progress.activeBackground
     };
     
     // Non-blocking sync - wait for Firebase ready
@@ -2385,6 +2421,95 @@ function syncToFirebase(progress) {
   } catch (err) {
     console.warn('Firebase sync error:', err);
     lastFirebaseSync = 0; // Reset bei Fehler
+  }
+}
+
+// Kompletter Firebase-Sync ohne Cooldown (für Account-Linking)
+async function syncToFirebaseComplete() {
+  try {
+    if (!window.firebaseApi || typeof window.firebaseApi.syncUserData !== 'function') {
+      throw new Error('Firebase API nicht verfügbar');
+    }
+    
+    await window.firebaseApi.ready();
+    
+    const progress = {
+      balance,
+      playerLevel,
+      playerXP,
+      totalXPEarned,
+      skillPoints,
+      skills: { ...skills },
+      boxType,
+      unlockedBoxes: Array.from(unlockedBoxes),
+      stats: { ...stats },
+      achievementsState: { ...achievementsState },
+      activeBoosts: { ...activeBoosts },
+      permanentUpgrades: { ...permanentUpgrades },
+      purchasedItems: Array.from(purchasedItems),
+      statUpgradesLevels: { ...statUpgradesLevels },
+      keysInventory: { ...keysInventory },
+      prestigeState: { ...prestigeState },
+      unlockedBackgrounds: Array.from(unlockedBackgrounds),
+      activeBackground
+    };
+    
+    let mythicsFound = 0;
+    let aethericsFound = 0;
+    try {
+      mythicsFound = getDiscoveredCountByRarity('Mythisch') || 0;
+      aethericsFound = getDiscoveredCountByRarity('Aetherisch') || 0;
+    } catch (e) {
+      console.warn('Could not count mythics/aetherics:', e);
+    }
+    
+    let itemCounts = {};
+    let discoveredItems = [];
+    let unlockedBgs = ['default'];
+    try {
+      const itemsRaw = localStorage.getItem(ITEMS_KEY);
+      if (itemsRaw) itemCounts = JSON.parse(itemsRaw);
+      const discoveredRaw = localStorage.getItem(DISCOVERED_KEY);
+      if (discoveredRaw) discoveredItems = JSON.parse(discoveredRaw);
+      const bgsRaw = localStorage.getItem(UNLOCKED_BACKGROUNDS_KEY);
+      if (bgsRaw) unlockedBgs = JSON.parse(bgsRaw);
+    } catch (e) {
+      console.warn('Could not load item data for sync:', e);
+    }
+    
+    const userData = {
+      displayName: localStorage.getItem('playerDisplayName') || 'Anonym',
+      totalXPEarned: progress.totalXPEarned,
+      totalBoxesOpened: progress.stats.totalBoxesOpened || 0,
+      mythicsFound,
+      aethericsFound,
+      balance: progress.balance,
+      playerLevel: progress.playerLevel,
+      playerXP: progress.playerXP,
+      skillPoints: progress.skillPoints,
+      skills: progress.skills,
+      prestigeLevel: progress.prestigeState?.level || 0,
+      runBoxesOpened: progress.prestigeState?.runBoxesOpened || 0,
+      activeBoosts: progress.activeBoosts,
+      permanentUpgrades: progress.permanentUpgrades,
+      purchasedItems: progress.purchasedItems,
+      statUpgradesLevels: progress.statUpgradesLevels,
+      keysInventory: progress.keysInventory,
+      boxType: progress.boxType,
+      unlockedBoxes: progress.unlockedBoxes,
+      stats: progress.stats,
+      itemCounts,
+      discoveredItems,
+      unlockedBackgrounds: unlockedBgs,
+      activeBackground: progress.activeBackground
+    };
+    
+    await window.firebaseApi.syncUserData(userData);
+    console.log('✅ Kompletter Spielstand zu Firebase hochgeladen');
+    return true;
+  } catch (err) {
+    console.error('Complete Firebase sync failed:', err);
+    throw err;
   }
 }
 
@@ -2557,6 +2682,68 @@ function findFreePosition(grid, rows, cols, itemWidth, itemHeight) {
     }
   }
   return null; // Keine freie Position gefunden
+}
+
+// Lädt Spielstand von Firebase und überschreibt lokalen Spielstand
+async function loadProgressFromFirebase() {
+  try {
+    if (!window.firebaseApi) {
+      throw new Error('Firebase API nicht verfügbar');
+    }
+    
+    // Warte bis Firebase bereit ist
+    await window.firebaseApi.ready();
+    
+    // Prüfe ob User eingeloggt ist
+    const uid = window.firebaseApi.getCurrentUid();
+    if (!uid) {
+      throw new Error('Kein User eingeloggt');
+    }
+    
+    console.log('Lade Spielstand von Firebase für User:', uid);
+    
+    // Spielstand vom Server abrufen
+    const serverData = await window.firebaseApi.getUserData();
+    
+    if (!serverData) {
+      console.log('Kein Spielstand auf dem Server gefunden (serverData ist null/undefined)');
+      return false;
+    }
+    
+    console.log('Server-Daten erhalten:', serverData);
+    
+    if (!serverData.gameData) {
+      console.log('Kein gameData vorhanden - neuer Account?');
+      return false;
+    }
+    
+    // Server-Daten in localStorage speichern
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(serverData.gameData));
+    localStorage.setItem(ITEMS_KEY, JSON.stringify(serverData.itemCounts || {}));
+    localStorage.setItem(DISCOVERED_KEY, JSON.stringify(serverData.discoveredItems || []));
+    localStorage.setItem(UNLOCKED_BACKGROUNDS_KEY, JSON.stringify(serverData.unlockedBackgrounds || ['default']));
+    
+    if (serverData.activeBackground) {
+      localStorage.setItem('activeBackground', serverData.activeBackground);
+    }
+    
+    // Spielstand neu laden
+    loadProgress();
+    loadCounts();
+    loadDiscovered();
+    loadUnlockedBackgrounds();
+    
+    console.log('Spielstand erfolgreich von Firebase geladen');
+    return true;
+  } catch (error) {
+    console.error('Firebase sync failed:', error);
+    // Zeige nur kritische Fehler, NetworkError kann z.B. bei neuen Accounts normal sein
+    if (error.message.includes('NetworkError') || error.message.includes('fetch')) {
+      console.warn('Network-Fehler beim Laden - eventuell kein Spielstand auf Server');
+      return false;
+    }
+    throw error;
+  }
 }
 
 // === GRID PLACEMENT HELPER FUNCTIONS ===
@@ -2774,19 +2961,11 @@ dom.openBtn.addEventListener('click', async () => {
   dom.overlay.style.height = `${rows * SLOT_SIZE_PX}px`;
   dom.overlay.style.display = 'block';
 
-  // === NEUE MULTI-SIZE GRID LOGIK ===
-  // 1. Generiere Random Items basierend auf itemCount
-  const pulledItems = [];
-  for (let i = 0; i < itemCount; i++) {
-    pulledItems.push(getRandomItem(openBoxType));
-  }
-
-  // 2. Keine Sortierung - Items werden in zufälliger Reihenfolge platziert
-
-  // 3. Grid-Array initialisieren (2D)
+  // === OPTIMIERTE MULTI-SIZE GRID LOGIK ===
+  // Grid-Array initialisieren (2D)
   const grid = Array(rows).fill(null).map(() => Array(columns).fill(null));
 
-  // 3.5. Erstelle zuerst alle leeren Hintergrund-Slots
+  // Erstelle zuerst alle leeren Hintergrund-Slots
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < columns; col++) {
       const emptySlot = document.createElement('div');
@@ -2797,21 +2976,81 @@ dom.openBtn.addEventListener('click', async () => {
     }
   }
 
-  // 4. Items im Grid platzieren
+  // Dynamische Item-Generierung: Generiere Items bis Ziel-Füllrate erreicht ist
   const placedItems = [];
-  for (let idx = 0; idx < pulledItems.length; idx++) {
-    const pulledItem = pulledItems[idx];
-    const itemWidth = pulledItem.gridSize?.width || 1;
-    const itemHeight = pulledItem.gridSize?.height || 1;
+  const targetItemCount = itemCount;
+  let itemsGenerated = 0;
+  let consecutiveFailures = 0;
+  const maxConsecutiveFailures = 15; // Nach 15 Fehlversuchen aufhören
+  
+  // Hilfsfunktion: Berechne verfügbare Slots im Grid
+  function countAvailableSlots(grid) {
+    let count = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < columns; c++) {
+        if (grid[r][c] === null) count++;
+      }
+    }
+    return count;
+  }
+  
+  // Hilfsfunktion: Finde größtmögliche freie Fläche
+  function getLargestFreeArea(grid) {
+    let maxWidth = 0;
+    let maxHeight = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < columns; c++) {
+        if (grid[r][c] === null) {
+          // Prüfe maximale Breite ab dieser Position
+          let w = 0;
+          while (c + w < columns && grid[r][c + w] === null) w++;
+          maxWidth = Math.max(maxWidth, w);
+          
+          // Prüfe maximale Höhe ab dieser Position
+          let h = 0;
+          while (r + h < rows && grid[r + h][c] === null) h++;
+          maxHeight = Math.max(maxHeight, h);
+        }
+      }
+    }
+    return { maxWidth, maxHeight };
+  }
+  
+  while (itemsGenerated < targetItemCount && consecutiveFailures < maxConsecutiveFailures) {
+    const availableSlots = countAvailableSlots(grid);
+    if (availableSlots === 0) break; // Grid komplett voll
+    
+    // Generiere neues Item
+    let pulledItem = getRandomItem(openBoxType);
+    let itemWidth = pulledItem.gridSize?.width || 1;
+    let itemHeight = pulledItem.gridSize?.height || 1;
+    
+    // Intelligente Größenanpassung wenn Platz knapp wird
+    const { maxWidth, maxHeight } = getLargestFreeArea(grid);
+    if (itemWidth > maxWidth || itemHeight > maxHeight) {
+      // Item ist zu groß - versuche kleineres Item zu generieren (max 3 Versuche)
+      let attempts = 0;
+      while (attempts < 3 && (itemWidth > maxWidth || itemHeight > maxHeight)) {
+        pulledItem = getRandomItem(openBoxType);
+        itemWidth = pulledItem.gridSize?.width || 1;
+        itemHeight = pulledItem.gridSize?.height || 1;
+        attempts++;
+      }
+      
+      // Wenn immer noch zu groß, überspringe dieses Item
+      if (itemWidth > maxWidth || itemHeight > maxHeight) {
+        consecutiveFailures++;
+        continue;
+      }
+    }
 
-    // Finde freie Position
+    // Versuche Item zu platzieren
     let placed = false;
     for (let row = 0; row < rows && !placed; row++) {
       for (let col = 0; col < columns && !placed; col++) {
-        // Prüfe ob Item passt
         if (canPlaceItemInGrid(grid, rows, columns, row, col, itemWidth, itemHeight)) {
           // Markiere Grid-Zellen als belegt
-          placeItemInGrid(grid, row, col, itemWidth, itemHeight, idx);
+          placeItemInGrid(grid, row, col, itemWidth, itemHeight, itemsGenerated);
 
           // Erstelle Slot Element
           const slot = document.createElement('div');
@@ -2832,11 +3071,15 @@ dom.openBtn.addEventListener('click', async () => {
 
           placedItems.push({ slot, item, pulledItem, row, col, width: itemWidth, height: itemHeight });
           placed = true;
+          itemsGenerated++;
+          consecutiveFailures = 0; // Reset bei Erfolg
         }
       }
     }
     
-    // Kein Platz gefunden - Item wird verworfen (still)
+    if (!placed) {
+      consecutiveFailures++;
+    }
   }
 
   // Verwende placedItems statt slots
@@ -2864,6 +3107,15 @@ dom.openBtn.addEventListener('click', async () => {
 
     // Zustand updaten
   discoveredItems.add(name);
+  
+  // Lifetime-Counter bei jedem gefundenen Item erhöhen
+  if (pulledItem.rarity) {
+    if (!stats.lifetimeDiscovered[pulledItem.rarity]) {
+      stats.lifetimeDiscovered[pulledItem.rarity] = 0;
+    }
+    stats.lifetimeDiscovered[pulledItem.rarity]++;
+  }
+  
   // Tracking: Anzahl erhöhen
   itemCounts[name] = (itemCounts[name] || 0) + 1;
   saveCounts();
@@ -3286,6 +3538,24 @@ function showLevelUpNotification() {
 // Aktualisiert die Balance-Anzeige
 function updateBalance() {
   dom.balance.textContent = `💰: ${formatNumber(balance)}`;
+  
+  // Dynamische Styling-Klassen basierend auf Geldmenge
+  dom.balance.classList.remove('balance-poor', 'balance-modest', 'balance-rich', 'balance-wealthy', 'balance-millionaire', 'balance-billionaire');
+  
+  if (balance >= 1000000000) {
+    dom.balance.classList.add('balance-billionaire');
+  } else if (balance >= 1000000) {
+    dom.balance.classList.add('balance-millionaire');
+  } else if (balance >= 100000) {
+    dom.balance.classList.add('balance-wealthy');
+  } else if (balance >= 10000) {
+    dom.balance.classList.add('balance-rich');
+  } else if (balance >= 1000) {
+    dom.balance.classList.add('balance-modest');
+  } else {
+    dom.balance.classList.add('balance-poor');
+  }
+  
   updateBoxAvailability();
   saveProgress(); // Speichere bei Balance-Änderung
   // Quickslots (Affordability) aktualisieren
@@ -3736,6 +4006,10 @@ if (dom.boxInfoModal) {
 
 // Sammlung-Button
 dom.collectionBtn.addEventListener('click', showCollection);
+dom.closeCollectionBtn.addEventListener('click', closeCollection);
+dom.collectionOverlay.addEventListener('click', (e) => {
+  if (e.target === dom.collectionOverlay) closeCollection();
+});
 // Achievements-Button
 if (dom.achievementsBtn) dom.achievementsBtn.addEventListener('click', showAchievements);
 if (dom.closeAchievementsBtn) dom.closeAchievementsBtn.addEventListener('click', closeAchievements);
@@ -4544,11 +4818,281 @@ function closeAchievements() {
 // ======= Statistik-Overlay =======
 dom.statsBtn.addEventListener('click', showStats);
 dom.closeStatsBtn.addEventListener('click', closeStats);
+dom.statsOverlay.addEventListener('click', (e) => {
+  if (e.target === dom.statsOverlay) closeStats();
+});
 
 // ======= Background-Selector =======
 const backgroundBtn = document.getElementById('backgroundBtn');
 if (backgroundBtn) {
   backgroundBtn.addEventListener('click', openBackgroundSelector);
+}
+
+// ======= Account Management =======
+const accountBtn = document.getElementById('accountBtn');
+const accountModal = document.getElementById('accountModal');
+const closeAccountBtn = document.getElementById('closeAccountBtn');
+
+if (accountBtn) {
+  accountBtn.addEventListener('click', openAccountModal);
+}
+if (closeAccountBtn) {
+  closeAccountBtn.addEventListener('click', () => {
+    accountModal.style.display = 'none';
+  });
+}
+if (accountModal) {
+  accountModal.addEventListener('click', (e) => {
+    if (e.target === accountModal) accountModal.style.display = 'none';
+  });
+}
+
+function openAccountModal() {
+  if (!accountModal) return;
+  
+  const accountStatus = document.getElementById('accountStatus');
+  const accountActions = document.getElementById('accountActions');
+  
+  const isAnon = window.firebaseApi?.isAnonymous() || false;
+  const email = window.firebaseApi?.getUserEmail() || null;
+  const uid = window.firebaseApi?.getCurrentUid() || 'Unbekannt';
+  
+  // Status anzeigen
+  if (isAnon) {
+    accountStatus.innerHTML = `
+      <p><strong>Status:</strong> <span style="color: #f39c12;">Anonymer Gast-Account</span></p>
+      <p><strong>User ID:</strong> <code style="font-size:0.85em;">${uid}</code></p>
+      <p style="margin-top:15px; color: #e74c3c; font-weight: bold;">⚠️ Achtung:</p>
+      <p>Dein Spielstand ist nur in diesem Browser gespeichert. Wenn du den Browser-Cache löschst oder das Gerät wechselst, gehen deine Daten verloren!</p>
+      <p style="margin-top:10px; color: #2ecc71;">✅ Empfehlung:</p>
+      <p>Verknüpfe deinen Account mit Email und Passwort, um deinen Spielstand dauerhaft zu sichern.</p>
+    `;
+    
+    accountActions.innerHTML = `
+      <h3 style="margin-bottom:10px;">Account upgraden</h3>
+      <input type="email" id="linkEmail" placeholder="Email-Adresse" style="width:100%; padding:10px; margin-bottom:10px; border:1px solid #ccc; border-radius:5px; font-size:14px;">
+      <input type="password" id="linkPassword" placeholder="Passwort (mind. 6 Zeichen)" style="width:100%; padding:10px; margin-bottom:10px; border:1px solid #ccc; border-radius:5px; font-size:14px;">
+      <button id="linkAccountBtn" class="upgrade-btn" style="width:100%; padding:12px; font-size:16px;">🔗 Account verknüpfen</button>
+      <p id="linkStatus" style="margin-top:10px; font-size:0.9em;"></p>
+      
+      <hr style="margin: 25px 0; border: 1px solid #444;">
+      
+      <h3 style="margin-bottom:10px;">Bereits verknüpft? Anmelden</h3>
+      <input type="email" id="loginEmail" placeholder="Email-Adresse" style="width:100%; padding:10px; margin-bottom:10px; border:1px solid #ccc; border-radius:5px; font-size:14px;">
+      <input type="password" id="loginPassword" placeholder="Passwort" style="width:100%; padding:10px; margin-bottom:10px; border:1px solid #ccc; border-radius:5px; font-size:14px;">
+      <button id="loginBtn" class="upgrade-btn" style="width:100%; padding:12px; font-size:16px; background: linear-gradient(135deg, #3498db, #2980b9);">🔑 Anmelden</button>
+      <p id="loginStatus" style="margin-top:10px; font-size:0.9em;"></p>
+    `;
+    
+    // Event Listener für Link-Button
+    setTimeout(() => {
+      const linkBtn = document.getElementById('linkAccountBtn');
+      if (linkBtn) {
+        linkBtn.addEventListener('click', async () => {
+          const emailInput = document.getElementById('linkEmail');
+          const passwordInput = document.getElementById('linkPassword');
+          const statusP = document.getElementById('linkStatus');
+          
+          const email = emailInput.value.trim();
+          const password = passwordInput.value;
+          
+          if (!email || !password) {
+            statusP.innerHTML = '<span style="color:#e74c3c;">❌ Bitte Email und Passwort eingeben</span>';
+            return;
+          }
+          
+          if (password.length < 6) {
+            statusP.innerHTML = '<span style="color:#e74c3c;">❌ Passwort muss mindestens 6 Zeichen lang sein</span>';
+            return;
+          }
+          
+          try {
+            linkBtn.disabled = true;
+            statusP.innerHTML = '<span style="color:#3498db;">⏳ Verknüpfe Account...</span>';
+            
+            await window.firebaseApi.linkAccountWithEmail(email, password);
+            
+            statusP.innerHTML = '<span style="color:#2ecc71;">✅ Account verknüpft! Lade Spielstand hoch...</span>';
+            
+            // Spielstand sofort hochladen nach Account-Linking
+            setTimeout(async () => {
+              try {
+                await saveProgress(); // Speichert lokal
+                await syncToFirebaseComplete(); // Synchronisiert komplett zu Firebase
+                statusP.innerHTML = '<span style="color:#2ecc71;">✅ Spielstand erfolgreich gesichert!</span>';
+                setTimeout(() => {
+                  openAccountModal();
+                }, 2000);
+              } catch (syncError) {
+                console.error('Sync after link failed:', syncError);
+                statusP.innerHTML = '<span style="color:#f39c12;">⚠️ Account verknüpft, aber Spielstand konnte nicht hochgeladen werden.</span>';
+                setTimeout(() => {
+                  openAccountModal();
+                }, 2000);
+              }
+            }, 500);
+          } catch (error) {
+            console.error('Link error:', error);
+            let errorMsg = error.message;
+            if (errorMsg.includes('email-already-in-use')) {
+              errorMsg = 'Diese Email wird bereits verwendet. Bitte verwende eine andere Email.';
+            } else if (errorMsg.includes('invalid-email')) {
+              errorMsg = 'Ungültige Email-Adresse.';
+            } else if (errorMsg.includes('weak-password')) {
+              errorMsg = 'Passwort ist zu schwach. Mindestens 6 Zeichen erforderlich.';
+            }
+            statusP.innerHTML = `<span style="color:#e74c3c;">❌ Fehler: ${errorMsg}</span>`;
+            linkBtn.disabled = false;
+          }
+        });
+      }
+    }, 100);
+    
+    // Event Listener für Login-Button
+    setTimeout(() => {
+      const loginBtn = document.getElementById('loginBtn');
+      if (loginBtn) {
+        loginBtn.addEventListener('click', async () => {
+          const emailInput = document.getElementById('loginEmail');
+          const passwordInput = document.getElementById('loginPassword');
+          const statusP = document.getElementById('loginStatus');
+          
+          const email = emailInput.value.trim();
+          const password = passwordInput.value;
+          
+          if (!email || !password) {
+            statusP.innerHTML = '<span style="color:#e74c3c;">❌ Bitte Email und Passwort eingeben</span>';
+            return;
+          }
+          
+          try {
+            loginBtn.disabled = true;
+            statusP.innerHTML = '<span style="color:#3498db;">⏳ Melde an...</span>';
+            
+            await window.firebaseApi.signInWithEmail(email, password);
+            
+            statusP.innerHTML = '<span style="color:#2ecc71;">✅ Erfolgreich angemeldet! Lade Spielstand...</span>';
+            
+            // Spielstand laden mit etwas mehr Wartezeit für Firebase
+            setTimeout(async () => {
+              try {
+                const loaded = await loadProgressFromFirebase();
+                if (loaded) {
+                  statusP.innerHTML = '<span style="color:#2ecc71;">✅ Spielstand geladen! Seite wird neu geladen...</span>';
+                  setTimeout(() => {
+                    location.reload();
+                  }, 1500);
+                } else {
+                  // Kein Spielstand auf Server, aber Login erfolgreich
+                  statusP.innerHTML = '<span style="color:#2ecc71;">✅ Angemeldet! Du startest mit einem neuen Spielstand.</span>';
+                  setTimeout(() => {
+                    location.reload();
+                  }, 1500);
+                }
+              } catch (error) {
+                console.error('Load progress error:', error);
+                // Login war erfolgreich, nur Spielstand-Sync hat Problem
+                statusP.innerHTML = '<span style="color:#2ecc71;">✅ Angemeldet! Seite wird neu geladen...</span>';
+                setTimeout(() => {
+                  location.reload();
+                }, 1500);
+              }
+            }, 1000);
+          } catch (error) {
+            console.error('Login error:', error);
+            let errorMsg = error.message;
+            if (errorMsg.includes('user-not-found') || errorMsg.includes('wrong-password') || errorMsg.includes('invalid-credential')) {
+              errorMsg = 'Email oder Passwort falsch.';
+            } else if (errorMsg.includes('invalid-email')) {
+              errorMsg = 'Ungültige Email-Adresse.';
+            } else if (errorMsg.includes('too-many-requests')) {
+              errorMsg = 'Zu viele fehlgeschlagene Versuche. Bitte warte einen Moment.';
+            }
+            statusP.innerHTML = `<span style="color:#e74c3c;">❌ Fehler: ${errorMsg}</span>`;
+            loginBtn.disabled = false;
+          }
+        });
+      }
+    }, 100);
+    
+  } else {
+    accountStatus.innerHTML = `
+      <p><strong>Status:</strong> <span style="color: #2ecc71;">✅ Registrierter Account</span></p>
+      <p><strong>Email:</strong> ${email || 'Keine Email hinterlegt'}</p>
+      <p><strong>User ID:</strong> <code style="font-size:0.85em;">${uid}</code></p>
+      <p style="margin-top:15px; color: #2ecc71;">Dein Spielstand ist dauerhaft gesichert und über alle Geräte synchronisiert.</p>
+    `;
+    
+    accountActions.innerHTML = `
+      <button id="syncNowBtn" class="upgrade-btn" style="width:100%; padding:12px; font-size:16px; background: linear-gradient(135deg, #2ecc71, #27ae60); margin-bottom:15px;">
+        🔄 Spielstand jetzt hochladen
+      </button>
+      <p id="syncStatus" style="margin-top:10px; font-size:0.9em; text-align:center;"></p>
+      <p style="font-size:0.85em; color:#aaa; margin-top:15px; font-style:italic;">
+        Dein Spielstand wird automatisch alle paar Sekunden synchronisiert. Dieser Button lädt sofort alle Daten hoch.
+      </p>
+      
+      <hr style="margin: 25px 0; border: 1px solid #444;">
+      
+      <button id="logoutBtn" class="upgrade-btn" style="width:100%; padding:12px; font-size:16px; background: linear-gradient(135deg, #e74c3c, #c0392b);">
+        🚪 Abmelden
+      </button>
+      <p style="font-size:0.85em; color:#aaa; margin-top:10px; text-align:center;">
+        Du wirst automatisch als anonymer Gast angemeldet. Dein Spielstand bleibt auf dem Server gesichert.
+      </p>
+    `;
+    
+    // Event Listener für Sync-Button
+    setTimeout(() => {
+      const syncBtn = document.getElementById('syncNowBtn');
+      const syncStatus = document.getElementById('syncStatus');
+      if (syncBtn) {
+        syncBtn.addEventListener('click', async () => {
+          try {
+            syncBtn.disabled = true;
+            syncStatus.innerHTML = '<span style="color:#3498db;">⏳ Lade Spielstand hoch...</span>';
+            
+            await saveProgress(); // Speichert lokal
+            await syncToFirebaseComplete(); // Synchronisiert komplett zu Firebase
+            
+            syncStatus.innerHTML = '<span style="color:#2ecc71;">✅ Spielstand erfolgreich hochgeladen!</span>';
+            setTimeout(() => {
+              syncStatus.innerHTML = '';
+              syncBtn.disabled = false;
+            }, 3000);
+          } catch (error) {
+            console.error('Manual sync failed:', error);
+            syncStatus.innerHTML = '<span style="color:#e74c3c;">❌ Fehler beim Hochladen. Bitte versuche es erneut.</span>';
+            syncBtn.disabled = false;
+          }
+        });
+      }
+    }, 100);
+    
+    // Event Listener für Logout-Button
+    setTimeout(() => {
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+          const confirmed = confirm('Möchtest du dich wirklich abmelden? Dein Spielstand bleibt auf dem Server gesichert.');
+          if (!confirmed) return;
+          
+          try {
+            logoutBtn.disabled = true;
+            await window.firebaseApi.signOut();
+            alert('Erfolgreich abgemeldet! Die Seite wird neu geladen.');
+            location.reload();
+          } catch (error) {
+            console.error('Logout error:', error);
+            alert('Fehler beim Abmelden: ' + error.message);
+            logoutBtn.disabled = false;
+          }
+        });
+      }
+    }, 100);
+  }
+  
+  accountModal.style.display = 'flex';
 }
 
 // ======= Leaderboard =======
@@ -4714,6 +5258,34 @@ function showStats() {
     </div>
     
     <div class="stats-section">
+      <h3>🌟 Lifetime Items (Alle Runs)</h3>
+      <div class="stat-item">
+        <span class="stat-label" style="color: #b0b0b0">⚪ Common:</span>
+        <span class="stat-value">${(stats.lifetimeDiscovered.Common || 0).toLocaleString('de-DE')}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label" style="color: #4a90e2">🔵 Selten:</span>
+        <span class="stat-value">${(stats.lifetimeDiscovered.Rare || 0).toLocaleString('de-DE')}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label" style="color: #9b59b6">🟣 Episch:</span>
+        <span class="stat-value">${(stats.lifetimeDiscovered.Epic || 0).toLocaleString('de-DE')}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label" style="color: #f39c12">🟠 Legendär:</span>
+        <span class="stat-value">${(stats.lifetimeDiscovered.Legendary || 0).toLocaleString('de-DE')}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label" style="color: #e74c3c">🔴 Mythisch:</span>
+        <span class="stat-value">${(stats.lifetimeDiscovered.Mythisch || 0).toLocaleString('de-DE')}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label" style="color: #8e44ad">🟣 Ätherisch:</span>
+        <span class="stat-value">${(stats.lifetimeDiscovered.Aetherisch || 0).toLocaleString('de-DE')}</span>
+      </div>
+    </div>
+    
+    <div class="stats-section">
       <h3>📊 Boxen pro Typ</h3>
       ${boxOrder.map(boxName => `
         <div class="stat-item">
@@ -4838,8 +5410,19 @@ updateLevelUI();
 // ======= Prestige System =======
 function getDiscoveredCountByRarity(rarity) {
   try {
+    // Normale Items aus dem Pool
     const pool = itemPools[rarity] || [];
     const names = new Set(pool.map(it => it.name));
+    
+    // Füge saisonale Items hinzu
+    for (const [eventKey, event] of Object.entries(seasonalItems)) {
+      const seasonalItemsForRarity = (event.items && event.items[rarity]) || [];
+      for (const item of seasonalItemsForRarity) {
+        if (item.name) names.add(item.name);
+      }
+    }
+    
+    // Zähle entdeckte Items
     let count = 0;
     for (const name of discoveredItems) {
       if (names.has(name)) count++;
@@ -5650,8 +6233,8 @@ function applyBackground(bgKey) {
 
 function checkBackgroundUnlocks() {
   const prestige = prestigeState.level || 0;
-  const mythicCount = getDiscoveredCountByRarity('Mythisch') || 0;
-  const aethericCount = getDiscoveredCountByRarity('Aetherisch') || 0;
+  const mythicCount = stats.lifetimeDiscovered?.Mythisch || 0;
+  const aethericCount = stats.lifetimeDiscovered?.Aetherisch || 0;
   const activeEvent = getActiveSeasonalEvent();
   
   for (const [key, bg] of Object.entries(backgrounds)) {
@@ -5786,13 +6369,25 @@ function openBackgroundSelector() {
   grid.appendChild(customCard);
   
   for (const [key, bg] of Object.entries(backgrounds)) {
+    // Saisonale Hintergründe nur während des Events anzeigen
+    if (bg.seasonal) {
+      const activeEvent = getActiveSeasonalEvent();
+      const isEventActive = activeEvent && bg.event && seasonalItems[bg.event];
+      if (!isEventActive) {
+        continue; // Überspringe saisonale Hintergründe wenn Event nicht aktiv
+      }
+    }
+    
     const isUnlocked = bg.unlocked || unlockedBackgrounds.has(key);
     const isActive = activeBackground === key;
     
     const card = document.createElement('div');
-    const cardBackground = bg.type === 'image' 
-      ? `${bg.fallbackColor || '#1a1a1a'} url('${bg.value}') center/cover no-repeat`
-      : bg.value;
+    // Gesperrte Hintergründe zeigen nur schwarzen Hintergrund mit Fragezeichen-Muster
+    const cardBackground = isUnlocked 
+      ? (bg.type === 'image' 
+          ? `${bg.fallbackColor || '#1a1a1a'} url('${bg.value}') center/cover no-repeat`
+          : bg.value)
+      : 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)';
     
     card.style.cssText = `
       background: ${cardBackground};
@@ -5800,7 +6395,6 @@ function openBackgroundSelector() {
       border-radius: 10px;
       padding: 15px;
       cursor: ${isUnlocked ? 'pointer' : 'not-allowed'};
-      opacity: ${isUnlocked ? '1' : '0.5'};
       transition: all 0.3s;
       position: relative;
       min-height: 120px;
@@ -5812,12 +6406,51 @@ function openBackgroundSelector() {
     // Saisonaler Indikator (Schneeflocke für Weihnachten)
     const seasonalIcon = bg.seasonal ? `<div style="position: absolute; top: 8px; right: 8px; font-size: 24px;">❄️</div>` : '';
     
+    // Gesperrte Hintergründe zeigen Fragezeichen-Icon
+    const lockedOverlay = !isUnlocked ? `<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 48px; opacity: 0.3;">🔒</div>` : '';
+    
+    // Fortschrittsanzeige für gesperrte Hintergründe
+    let progressBar = '';
+    if (!isUnlocked && bg.unlockCondition) {
+      let current = 0;
+      let required = 0;
+      let label = '';
+      
+      if (bg.unlockCondition.startsWith('prestige')) {
+        required = parseInt(bg.unlockCondition.replace('prestige', ''));
+        current = prestigeState.level || 0;
+        label = 'Prestige';
+      } else if (bg.unlockCondition.startsWith('mythic')) {
+        required = parseInt(bg.unlockCondition.replace('mythic', ''));
+        current = stats.lifetimeDiscovered?.Mythisch || 0;
+        label = 'Mythische Items';
+      } else if (bg.unlockCondition.startsWith('aetheric')) {
+        required = parseInt(bg.unlockCondition.replace('aetheric', ''));
+        current = stats.lifetimeDiscovered?.Aetherisch || 0;
+        label = 'Ätherische Items';
+      }
+      
+      if (required > 0) {
+        const percentage = Math.min(100, Math.floor((current / required) * 100));
+        progressBar = `
+          <div style="margin-top: 8px;">
+            <div style="font-size: 0.75em; margin-bottom: 3px; color: #aaa;">${current}/${required} ${label}</div>
+            <div style="background: rgba(0,0,0,0.5); border-radius: 10px; height: 6px; overflow: hidden;">
+              <div style="background: linear-gradient(90deg, #4a90e2, #50c878); width: ${percentage}%; height: 100%; border-radius: 10px; transition: width 0.3s;"></div>
+            </div>
+          </div>
+        `;
+      }
+    }
+    
     card.innerHTML = `
       ${seasonalIcon}
+      ${lockedOverlay}
       <div style="background: rgba(0,0,0,0.7); padding: 8px; border-radius: 5px;">
         <div style="font-weight: bold; margin-bottom: 3px;">${bg.name}${isActive ? ' ✓' : ''}</div>
         <div style="font-size: 0.85em; opacity: 0.9;">${bg.description}</div>
         ${!isUnlocked ? `<div style="font-size: 0.8em; color: #ff6b6b; margin-top: 5px;">🔒 ${getUnlockText(bg.unlockCondition)}</div>` : ''}
+        ${progressBar}
       </div>
     `;
     
@@ -5873,6 +6506,20 @@ setTimeout(() => {
   
   // Prüfe ob ein saisonales Event aktiv ist und ob der Nutzer das erste Mal lädt
   const hasSeenSeasonalBackground = localStorage.getItem('hasSeenSeasonalBackground_christmas');
+  
+  // Prüfe ob aktueller Hintergrund saisonal ist und Event nicht aktiv
+  if (saved && backgrounds[saved]) {
+    const savedBg = backgrounds[saved];
+    if (savedBg.seasonal) {
+      const isEventActive = activeEvent && savedBg.event && seasonalItems[savedBg.event];
+      if (!isEventActive) {
+        // Event nicht mehr aktiv - wechsle zu Standard
+        applyBackground('default');
+        checkBackgroundUnlocks();
+        return;
+      }
+    }
+  }
   
   if (activeEvent && activeEvent.name === 'Weihnachten' && !hasSeenSeasonalBackground) {
     // Erstes Mal während Weihnachten - wähle Schneehintergrund automatisch

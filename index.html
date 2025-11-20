@@ -105,6 +105,7 @@
         <button id="collectionBtn" title="Sammlung">📚</button>
         <button id="leaderboardBtn" title="Leaderboard">🏆</button>
         <button id="backgroundBtn" title="Hintergrund">🎨</button>
+        <button id="accountBtn" title="Account">👤</button>
       </div>
     </div>
     <div id="actionButtons">
@@ -183,7 +184,7 @@
       
       <div class="skill-branch">
         <h3>⚡ Tempo</h3>
-        <p class="skill-description">Schnellere Untersuchung<br>-5% Zeit pro Punkt</p>
+        <p class="skill-description">Schnellere Untersuchung<br>-3.5% Zeit pro Punkt</p>
         <div class="skill-level">
           <span id="effizienzLevel">0</span> / 10
         </div>
@@ -217,6 +218,18 @@
 <div id="collectionOverlay" style="display:none;" class="overlay">
   <button id="closeCollectionBtn">❌</button>
   <div id="collectionGrid" class="grid"></div>
+</div>
+
+<!-- Account Linking Modal -->
+<div id="accountModal" style="display:none;" class="overlay">
+  <div class="modal-content info-content">
+    <button id="closeAccountBtn" class="close-btn">❌</button>
+    <h2>👤 Account</h2>
+    <div id="accountInfo" style="text-align:left; line-height:1.8; padding:20px; max-height:70vh; overflow-y:auto;">
+      <div id="accountStatus"></div>
+      <div id="accountActions" style="margin-top:20px;"></div>
+    </div>
+  </div>
 </div>
 
 <!-- Prestige Modal -->

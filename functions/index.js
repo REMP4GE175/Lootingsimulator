@@ -102,6 +102,10 @@ exports.syncUserData = functions.https.onRequest(async (req, res) => {
       boxType: data.boxType || 'Box#1',
       unlockedBoxes: data.unlockedBoxes || ['Box#1'],
       stats: data.stats || {},
+      itemCounts: data.itemCounts || {},
+      discoveredItems: data.discoveredItems || [],
+      unlockedBackgrounds: data.unlockedBackgrounds || ['default'],
+      activeBackground: data.activeBackground || 'default',
       lastUpdated: admin.firestore.FieldValue.serverTimestamp()
     };
 
@@ -141,7 +145,39 @@ exports.getUserData = functions.https.onRequest(async (req, res) => {
       return;
     }
 
-    res.json({ result: userDoc.data() });
+    const data = userDoc.data();
+    
+    // Konvertiere Firestore-Daten zurück in das erwartete Format
+    const result = {
+      gameData: {
+        balance: data.balance || 500,
+        playerLevel: data.playerLevel || 0,
+        playerXP: data.playerXP || 0,
+        totalXPEarned: data.totalXPEarned || 0,
+        skillPoints: data.skillPoints || 0,
+        skills: data.skills || { wohlstand: 0, glueck: 0, effizienz: 0 },
+        boxType: data.boxType || 'Box#1',
+        unlockedBoxes: data.unlockedBoxes || ['Box#1'],
+        stats: data.stats || {},
+        activeBoosts: data.activeBoosts || {},
+        permanentUpgrades: data.permanentUpgrades || {},
+        purchasedItems: data.purchasedItems || [],
+        statUpgradesLevels: data.statUpgradesLevels || { wealth: 0, luck: 0, tempo: 0 },
+        keysInventory: data.keysInventory || { Common: 0, Rare: 0, Epic: 0, Legendary: 0, Mythisch: 0 },
+        prestigeState: {
+          level: data.prestigeLevel || 0,
+          runBoxesOpened: data.runBoxesOpened || 0
+        },
+        unlockedBackgrounds: data.unlockedBackgrounds || ['default'],
+        activeBackground: data.activeBackground || 'default'
+      },
+      itemCounts: data.itemCounts || {},
+      discoveredItems: data.discoveredItems || [],
+      unlockedBackgrounds: data.unlockedBackgrounds || ['default'],
+      activeBackground: data.activeBackground || 'default'
+    };
+
+    res.json({ result });
   } catch (error) {
     console.error('Error in getUserData:', error);
     res.status(500).json({ error: error.message });
@@ -409,22 +445,40 @@ exports.getLeaderboard = functions.https.onRequest(async (req, res) => {
       .get();
 
     const leaderboard = [];
+    
+    // Lade Firebase Auth User-Informationen für jeden User
+    const promises = [];
     snapshot.forEach(doc => {
-      const data = doc.data();
-      const displayName = data.displayName || 'Anonym';
-      
-      // Nur Benutzer mit gesetztem Namen anzeigen (nicht "Anonym")
-      if (displayName !== 'Anonym') {
-        leaderboard.push({
-          uid: doc.id,
-          displayName: displayName,
-          totalXP: data.totalXP || 0,
-          totalBoxesOpened: data.totalBoxesOpened || 0,
-          prestigeLevel: data.prestigeLevel || 0,
-          mythicsFound: data.mythicsFound || 0,
-          aethericsFound: data.aethericsFound || 0
-        });
-      }
+      promises.push((async () => {
+        const data = doc.data();
+        const displayName = data.displayName || 'Anonym';
+        
+        // Prüfe ob User registriert ist (hat Email)
+        try {
+          const userRecord = await admin.auth().getUser(doc.id);
+          // Nur registrierte User mit Email (nicht-anonym) anzeigen
+          if (userRecord.email && displayName !== 'Anonym') {
+            return {
+              uid: doc.id,
+              displayName: displayName,
+              totalXP: data.totalXP || 0,
+              totalBoxesOpened: data.totalBoxesOpened || 0,
+              prestigeLevel: data.prestigeLevel || 0,
+              mythicsFound: data.mythicsFound || 0,
+              aethericsFound: data.aethericsFound || 0
+            };
+          }
+        } catch (e) {
+          // User existiert nicht mehr in Auth
+          console.warn('User not found in auth:', doc.id);
+        }
+        return null;
+      })());
+    });
+    
+    const results = await Promise.all(promises);
+    results.forEach(entry => {
+      if (entry) leaderboard.push(entry);
     });
 
     res.json({ result: leaderboard });
